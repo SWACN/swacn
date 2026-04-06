@@ -1,0 +1,5 @@
+{
+  "name": "SWACN",
+  "description": "Software Without Any Cool Name - A terminal-first reactive model for state hydration.",
+  "requestFramePermissions": []
+}

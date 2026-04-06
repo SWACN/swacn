@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Epilogue:ital,wght@0,700;0,800;0,900;1,700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-primary: #703e0e;
+  --color-on-primary: #ffffff;
+  --color-background: #fcf9f0;
+  --color-on-surface: #1c1c17;
+  --color-surface-container-high: #ebe8df;
+  --color-surface-container-low: #f6f3ea;
+  --color-outline: #847469;
+  --color-outline-variant: #d7c3b6;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-body;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+  }
+}
+
+.hard-shadow {
+  box-shadow: 4px 4px 0px 0px rgba(28, 28, 23, 0.2);
+}
+
