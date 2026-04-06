@@ -20,47 +20,90 @@ using json = nlohmann::json;
 void print_usage() {
     std::cout << "swacn - Interactive terminal recording\n\n";
     std::cout << "Usage:\n";
-    std::cout << "  swacn init           # Snapshot current directory\n";
-    std::cout << "  swacn auth login <K> # Save your API key\n";
-    std::cout << "  swacn record         # Start recording (output + fs changes)\n";
+    std::cout << "  swacn auth login <K> # Verify and save your API key\n";
+    std::cout << "  swacn record         # Initialize and start recording (output + fs changes)\n";
     std::cout << "  swacn record --keys  # Start recording and capture keystrokes\n";
     std::cout << "  swacn upload         # Upload the recording\n";
 }
 
-void save_credentials(const std::string& api_key) {
-    fs::path home_dir = getenv("HOME");
-    fs::path cred_dir = home_dir / ".config" / "swacn";
-    fs::create_directories(cred_dir);
+fs::path get_credentials_path() {
+    const char* home = getenv("HOME");
+    if (!home) return "";
+    return fs::path(home) / ".config" / "swacn" / "credentials.json";
+}
 
-    std::ofstream cred_file(cred_dir / "credentials");
-    cred_file << api_key;
-    std::cout << "[swacn] Successfully logged in. Credentials saved.\n";
+std::string get_api_base_url() {
+    const char* env_url = getenv("SWACN_API_URL");
+    std::string base_url;
+    
+    if (env_url) {
+        base_url = env_url; // Use local dev server if provided
+    } else {
+        base_url = "https://api.swacn.io"; // PRODUCTION FALLBACK
+    }
+
+    // Clean up trailing slash if the user accidentally adds one
+    if (!base_url.empty() && base_url.back() == '/') {
+        base_url.pop_back();
+    }
+    
+    return base_url;
+}
+
+void login_user(const std::string& api_key) {
+    std::string api_endpoint = get_api_base_url() + "/v1/users/me";
+    
+    std::cout << "[swacn] Verifying credentials with server...\n";
+    
+    cpr::Response r = cpr::Get(cpr::Url{api_endpoint}, 
+                               cpr::Header{{"Authorization", "Bearer " + api_key}});
+
+    if (r.status_code == 200) {
+        json user_data = json::parse(r.text);
+        
+        fs::path cred_path = get_credentials_path();
+        fs::create_directories(cred_path.parent_path());
+
+        json config;
+        config["api_key"] = api_key;
+        config["username"] = user_data["username"];
+        config["email"] = user_data["email"];
+        
+        std::ofstream cred_file(cred_path);
+        cred_file << config.dump(4); // Pretty print with 4 spaces
+        
+        std::cout << "[swacn] Successfully logged in as " << user_data["username"].get<std::string>() << ".\n";
+    } else {
+        std::cerr << "[swacn] Error: Invalid API key or server unreachable (HTTP " << r.status_code << ").\n";
+    }
 }
 
 std::string get_api_key() {
-    char* home = getenv("HOME");
-    if (!home) return "";
-    fs::path cred_path = fs::path(home) / ".config" / "swacn" / "credentials";
+    fs::path cred_path = get_credentials_path();
     if (!fs::exists(cred_path)) return "";
     
-    std::ifstream cred_file(cred_path);
-    std::string key;
-    std::getline(cred_file, key);
-    return key;
+    try {
+        std::ifstream cred_file(cred_path);
+        json config;
+        cred_file >> config;
+        return config.value("api_key", "");
+    } catch (...) {
+        return ""; // Return empty if JSON is corrupted
+    }
 }
 
 // --- Command Logic ---
 
-void initialize_project() {
+bool prepare_recording_environment() {
     fs::path swacn_dir = ".swacn";
     fs::path config_file = "swacn.json";
 
-    std::cout << "[swacn] Initializing project...\n";
+    std::cout << "[swacn] Initializing recording environment...\n";
 
     if (!fs::exists(swacn_dir)) {
         if (!fs::create_directory(swacn_dir)) {
             std::cerr << "[swacn] Error: Could not create " << swacn_dir << " directory.\n";
-            return;
+            return false;
         }
     }
 
@@ -78,7 +121,7 @@ void initialize_project() {
 
     if (result != 0) {
         std::cerr << "[swacn] Error: Failed to create baseline archive.\n";
-        return;
+        return false;
     }
 
     // Create Manifest
@@ -100,6 +143,7 @@ void initialize_project() {
         manifest << manifest_json.dump(2);
         std::cout << "[swacn] Manifest generated successfully.\n";
     }
+    return true;
 }
 
 void upload_project() {
@@ -118,7 +162,7 @@ void upload_project() {
         return;
     }
 
-    std::string api_endpoint = "http://localhost:8080/v1/casts/upload";
+    std::string api_endpoint = get_api_base_url() + "/v1/casts/upload";
 
     cpr::Multipart multipart_data{
         {"manifest", cpr::File{manifest_path.string()}},
@@ -168,6 +212,39 @@ void launch_asciinema(const std::string& output_file, bool capture_keys) {
     }
 }
 
+void list_projects() {
+    std::string api_key = get_api_key();
+    if (api_key.empty()) {
+        std::cerr << "[swacn] Error: You are not logged in. Run `swacn auth login <api-key>` first.\n";
+        return;
+    }
+
+    std::string api_endpoint = get_api_base_url() + "/v1/casts";
+    std::cout << "[swacn] Fetching your recordings...\n";
+
+    cpr::Response r = cpr::Get(cpr::Url{api_endpoint}, 
+                               cpr::Header{{"Authorization", "Bearer " + api_key}});
+
+    if (r.status_code == 200) {
+        json casts = json::parse(r.text);
+        if (casts.empty()) {
+            std::cout << "No recordings found. Try running `swacn record` first.\n";
+            return;
+        }
+
+        std::cout << "\nYour SWACN Recordings:\n";
+        std::cout << "--------------------------------------------------\n";
+        for (const auto& cast : casts) {
+            std::cout << "ID:      " << cast["id"].get<std::string>() << "\n";
+            std::cout << "Date:    " << cast["created_at"].get<std::string>() << "\n";
+            std::cout << "URL:     " << cast["url"].get<std::string>() << "\n";
+            std::cout << "--------------------------------------------------\n";
+        }
+    } else {
+        std::cerr << "[swacn] Error fetching recordings (HTTP " << r.status_code << ").\n";
+    }
+}
+
 // --- Main Router ---
 
 int main(int argc, char* argv[]) {
@@ -178,22 +255,27 @@ int main(int argc, char* argv[]) {
 
     std::string command = argv[1];
 
-    if (command == "init") {
-        initialize_project();
-    } 
-    else if (command == "auth") {
+    if (command == "auth") {
         if (argc >= 4 && std::string(argv[2]) == "login") {
-            save_credentials(argv[3]);
+            login_user(argv[3]);
         } else {
             std::cerr << "Usage: swacn auth login <api_key>\n";
         }
     }
     else if (command == "record") {
+        // Auto-initialize project directory and baseline before recording
+        if (!prepare_recording_environment()) {
+            return 1; // Exit early if setup fails
+        }
+
         bool capture_keys = (argc >= 3 && std::string(argv[2]) == "--keys");
         launch_asciinema(".swacn/demo.cast", capture_keys);
     }
     else if (command == "upload") {
         upload_project();
+    }
+    else if (command == "list") {
+        list_projects();
     }
     else {
         std::cerr << "Unknown command: " << command << "\n";

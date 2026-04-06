@@ -3,6 +3,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     github_id VARCHAR(255) UNIQUE NOT NULL,
     username VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
     api_key VARCHAR(64) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

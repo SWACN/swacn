@@ -15,6 +15,44 @@ void AuthController::login(const drogon::HttpRequestPtr& req, std::function<void
     callback(resp);
 }
 
+void AuthController::getMe(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    std::string auth_header = req->getHeader("Authorization");
+    if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k401Unauthorized);
+        callback(resp);
+        return;
+    }
+    
+    std::string api_key = auth_header.substr(7);
+    auto dbClient = drogon::app().getDbClient();
+    
+    dbClient->execSqlAsync(
+        "SELECT username, email FROM users WHERE api_key = $1",
+        [callback](const drogon::orm::Result& r) {
+            if (r.empty()) {
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k401Unauthorized);
+                callback(resp);
+                return;
+            }
+            
+            Json::Value ret;
+            ret["username"] = r[0]["username"].as<std::string>();
+            ret["email"] = r[0]["email"].isNull() ? "" : r[0]["email"].as<std::string>();
+            
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(ret);
+            callback(resp);
+        },
+        [callback](const drogon::orm::DrogonDbException& e) {
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setStatusCode(drogon::k500InternalServerError);
+            callback(resp);
+        },
+        api_key
+    );
+}
+
 void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     auto code = req->getParameter("code");
     if (code.empty()) {
