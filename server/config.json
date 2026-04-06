@@ -1,0 +1,27 @@
+{
+  "app": {
+    "threads_num": 0,
+    "document_root": "./public",
+    "upload_path": "uploads",
+    "client_max_body_size": "100M"
+  },
+  "listeners": [
+    {
+      "address": "0.0.0.0",
+      "port": 8080,
+      "https": false
+    }
+  ],
+  "db_clients": [
+    {
+      "name": "default",
+      "rdbms": "postgresql",
+      "host": "127.0.0.1",
+      "port": 5432,
+      "dbname": "swacn_db",
+      "user": "postgres",
+      "password": "yourpassword",
+      "connection_number": 5
+    }
+  ]
+}
