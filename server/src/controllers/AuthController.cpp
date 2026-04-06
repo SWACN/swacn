@@ -113,14 +113,8 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
                 [callback](const drogon::orm::Result& r) {
                     std::string active_key = r[0]["api_key"].as<std::string>();
                     
-                    // In a real app, you'd set a secure HTTP-only session cookie here 
-                    // and redirect to a React/Vue dashboard showing the API key.
-                    // For now, we return it as JSON.
-                    Json::Value ret;
-                    ret["status"] = "success";
-                    ret["message"] = "Run `swacn auth login " + active_key + "` in your terminal.";
-                    ret["api_key"] = active_key;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(ret);
+                    std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
+                    auto resp = drogon::HttpResponse::newRedirectionResponse(frontend_url + "/auth-callback?token=" + active_key);
                     callback(resp);
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {

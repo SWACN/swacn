@@ -7,7 +7,7 @@
             "path": "server"
         },
         {
-            "path": "player"
+            "path": "web"
         }
     ],
     "settings": {}

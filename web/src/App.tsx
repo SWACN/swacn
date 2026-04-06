@@ -5,11 +5,17 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+// Layout
 import { Layout } from './components/Layout';
+
+// Pages
 import { Home } from './pages/Home';
 import { Lab } from './pages/Lab';
 import { Blueprint } from './pages/Blueprint';
 import { CLI } from './pages/CLI';
+import { AuthCallback } from './pages/AuthCallback';
+import { Dashboard } from './pages/Dashboard';
 
 export default function App() {
   return (
@@ -17,10 +23,13 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/lab" element={<Lab />} />
+          <Route path="/auth-callback" element={<AuthCallback />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/lab/:id" element={<Lab />} />
+          <Route path="/lab" element={<Lab />} /> {/* Fallback for testing */}
           <Route path="/blueprint" element={<Blueprint />} />
           <Route path="/cli" element={<CLI />} />
-          {/* Fallback to Home for now */}
+          {/* Fallback route */}
           <Route path="*" element={<Home />} />
         </Routes>
       </Layout>
