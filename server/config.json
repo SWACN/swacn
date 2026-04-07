@@ -2,8 +2,11 @@
   "app": {
     "threads_num": 0,
     "document_root": "./public",
-    "upload_path": "uploads",
-    "client_max_body_size": "100M"
+    "upload_path": "./public/uploads",
+    "client_max_body_size": "100M",
+    "file_types": [
+      "html", "js", "css", "json", "cast", "gz", "tar"
+    ]
   },
   "listeners": [
     {

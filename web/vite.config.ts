@@ -35,6 +35,11 @@ export default defineConfig(({mode}) => {
           target: 'http://127.0.0.1:8080',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
+        },
+        // ADD THIS: Route all asset requests to the C++ backend
+        '/uploads': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true
         }
       }
     },
