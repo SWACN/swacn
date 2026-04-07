@@ -20,10 +20,11 @@ using json = nlohmann::json;
 void print_usage() {
     std::cout << "swacn - Interactive terminal recording\n\n";
     std::cout << "Usage:\n";
-    std::cout << "  swacn auth login <K> # Verify and save your API key\n";
-    std::cout << "  swacn record         # Initialize and start recording (output + fs changes)\n";
-    std::cout << "  swacn record --keys  # Start recording and capture keystrokes\n";
-    std::cout << "  swacn upload         # Upload the recording\n";
+    std::cout << "  swacn auth login <K>  # Verify and save your API key\n";
+    std::cout << "  swacn record          # Start recording output only\n";
+    std::cout << "  swacn record --fs     # Start recording output AND capture filesystem state\n";
+    std::cout << "  swacn record --keys   # Start recording output AND capture keystrokes\n";
+    std::cout << "  swacn upload          # Upload the recording\n";
 }
 
 fs::path get_credentials_path() {
@@ -37,12 +38,11 @@ std::string get_api_base_url() {
     std::string base_url;
     
     if (env_url) {
-        base_url = env_url; // Use local dev server if provided
+        base_url = env_url; 
     } else {
-        base_url = "https://api.swacn.io"; // PRODUCTION FALLBACK
+        base_url = "https://api.swacn.io"; 
     }
 
-    // Clean up trailing slash if the user accidentally adds one
     if (!base_url.empty() && base_url.back() == '/') {
         base_url.pop_back();
     }
@@ -70,7 +70,7 @@ void login_user(const std::string& api_key) {
         config["email"] = user_data["email"];
         
         std::ofstream cred_file(cred_path);
-        cred_file << config.dump(4); // Pretty print with 4 spaces
+        cred_file << config.dump(4); 
         
         std::cout << "[swacn] Successfully logged in as " << user_data["username"].get<std::string>() << ".\n";
     } else {
@@ -88,13 +88,13 @@ std::string get_api_key() {
         cred_file >> config;
         return config.value("api_key", "");
     } catch (...) {
-        return ""; // Return empty if JSON is corrupted
+        return ""; 
     }
 }
 
 // --- Command Logic ---
 
-bool prepare_recording_environment() {
+bool prepare_recording_environment(bool capture_fs) {
     fs::path swacn_dir = ".swacn";
     fs::path config_file = "swacn.json";
 
@@ -107,29 +107,30 @@ bool prepare_recording_environment() {
         }
     }
 
-    // Capture baseline tarball
-    std::string tar_cmd = "tar -czf .swacn/baseline.tar.gz "
-                          "--exclude='.swacn' "
-                          "--exclude='.git' "
-                          "--exclude='node_modules' "
-                          "--exclude='target' " 
-                          "--exclude='build' "  
-                          ".";
-    
-    std::cout << "[swacn] Capturing baseline filesystem state...\n";
-    int result = std::system(tar_cmd.c_str());
-
-    if (result != 0) {
-        std::cerr << "[swacn] Error: Failed to create baseline archive.\n";
-        return false;
-    }
-
     // Create Manifest
     json manifest_json;
     manifest_json["version"] = "0.1.0";
     manifest_json["timestamp"] = std::time(nullptr);
-    manifest_json["baseline"] = "baseline.tar.gz";
     manifest_json["recording"] = "demo.cast";
+
+    if (capture_fs) {
+        std::string tar_cmd = "env COPYFILE_DISABLE=1 tar -czf .swacn/baseline.tar.gz "
+                              "--exclude='.swacn' "
+                              "--exclude='.git' "
+                              "--exclude='node_modules' "
+                              "--exclude='target' " 
+                              "--exclude='build' "  
+                              ".";
+        
+        std::cout << "[swacn] Capturing baseline filesystem state...\n";
+        int result = std::system(tar_cmd.c_str());
+
+        if (result != 0) {
+            std::cerr << "[swacn] Error: Failed to create baseline archive.\n";
+            return false;
+        }
+        manifest_json["baseline"] = "baseline.tar.gz";
+    }
 
     if (fs::exists(config_file)) {
         try {
@@ -154,22 +155,37 @@ void upload_project() {
     }
 
     fs::path manifest_path = ".swacn/manifest.json";
-    fs::path baseline_path = ".swacn/baseline.tar.gz";
     fs::path cast_path = ".swacn/demo.cast";
 
-    if (!fs::exists(manifest_path) || !fs::exists(baseline_path) || !fs::exists(cast_path)) {
-        std::cerr << "[swacn] Error: Incomplete or missing recording assets in .swacn/\n";
+    if (!fs::exists(manifest_path) || !fs::exists(cast_path)) {
+        std::cerr << "[swacn] Error: Missing manifest.json or demo.cast in .swacn/. Cannot upload.\n";
         return;
     }
 
+    // Parse manifest to determine payload requirements
+    std::ifstream manifest_file(manifest_path);
+    json manifest_json;
+    try {
+        manifest_file >> manifest_json;
+    } catch (...) {
+        std::cerr << "[swacn] Error: manifest.json is corrupted.\n";
+        return;
+    }
+
+    cpr::Multipart multipart_data{};
+    multipart_data.parts.push_back(cpr::Part{"manifest", cpr::File{manifest_path.string()}});
+    multipart_data.parts.push_back(cpr::Part{"recording", cpr::File{cast_path.string()}});
+
+    if (manifest_json.contains("baseline")) {
+        fs::path baseline_path = ".swacn/" + manifest_json["baseline"].get<std::string>();
+        if (!fs::exists(baseline_path)) {
+            std::cerr << "[swacn] Error: Manifest expects " << baseline_path << " but it is missing.\n";
+            return;
+        }
+        multipart_data.parts.push_back(cpr::Part{"baseline", cpr::File{baseline_path.string()}});
+    }
+
     std::string api_endpoint = get_api_base_url() + "/v1/casts/upload";
-
-    cpr::Multipart multipart_data{
-        {"manifest", cpr::File{manifest_path.string()}},
-        {"baseline", cpr::File{baseline_path.string()}},
-        {"recording", cpr::File{cast_path.string()}}
-    };
-
     cpr::Header headers{{"Authorization", "Bearer " + api_key}};
 
     std::cout << "[swacn] Uploading to " << api_endpoint << "...\n";
@@ -182,7 +198,7 @@ void upload_project() {
     }
 }
 
-void launch_asciinema(const std::string& output_file, bool capture_keys) {
+void launch_asciinema(const std::string& output_file, bool capture_keys, bool capture_fs) {
     pid_t pid = fork();
 
     if (pid < 0) {
@@ -200,15 +216,20 @@ void launch_asciinema(const std::string& output_file, bool capture_keys) {
         execvp(args[0], const_cast<char* const*>(args.data()));
         exit(1); 
     } else {
-        // Parent: File watcher
-        efsw::FileWatcher fileWatcher;
-        SwacnUpdateListener listener(output_file);
-        efsw::WatchID watchID = fileWatcher.addWatch(".", &listener, true);
-        fileWatcher.watch();
+        // Parent: File watcher (Optional)
+        if (capture_fs) {
+            efsw::FileWatcher fileWatcher;
+            SwacnUpdateListener listener(output_file);
+            efsw::WatchID watchID = fileWatcher.addWatch(".", &listener, true);
+            fileWatcher.watch();
 
-        waitpid(pid, nullptr, 0);
-        fileWatcher.removeWatch(watchID);
-        std::cout << "[swacn] Recording finished and fs watcher terminated.\n";
+            waitpid(pid, nullptr, 0);
+            fileWatcher.removeWatch(watchID);
+            std::cout << "[swacn] Recording finished and fs watcher terminated.\n";
+        } else {
+            waitpid(pid, nullptr, 0);
+            std::cout << "[swacn] Recording finished.\n";
+        }
     }
 }
 
@@ -263,13 +284,20 @@ int main(int argc, char* argv[]) {
         }
     }
     else if (command == "record") {
-        // Auto-initialize project directory and baseline before recording
-        if (!prepare_recording_environment()) {
-            return 1; // Exit early if setup fails
+        bool capture_keys = false;
+        bool capture_fs = false;
+
+        for (int i = 2; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--keys") capture_keys = true;
+            if (arg == "--fs") capture_fs = true;
         }
 
-        bool capture_keys = (argc >= 3 && std::string(argv[2]) == "--keys");
-        launch_asciinema(".swacn/demo.cast", capture_keys);
+        if (!prepare_recording_environment(capture_fs)) {
+            return 1; 
+        }
+
+        launch_asciinema(".swacn/demo.cast", capture_keys, capture_fs);
     }
     else if (command == "upload") {
         upload_project();

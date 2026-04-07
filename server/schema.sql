@@ -13,7 +13,7 @@ CREATE TABLE casts (
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     project_name VARCHAR(255),
     manifest_url TEXT NOT NULL,
-    baseline_url TEXT NOT NULL,
+    baseline_url TEXT,
     recording_url TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -5,7 +5,6 @@
 namespace fs = std::filesystem;
 
 void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-    // 1. Auth Logic (Keep your working auth check here)
     std::string auth_header = req->getHeader("Authorization");
     if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
         auto resp = drogon::HttpResponse::newHttpResponse();
@@ -29,25 +28,21 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 
             // 2. Parse Multipart
             drogon::MultiPartParser fileUpload;
-            if (fileUpload.parse(req) != 0 || fileUpload.getFiles().size() != 3) {
+            if (fileUpload.parse(req) != 0 || fileUpload.getFiles().size() < 2) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k400BadRequest);
-                resp->setBody("Incomplete upload assets");
+                resp->setBody("Incomplete upload assets. Requires at least manifest and recording.");
                 callback(resp);
                 return;
             }
 
-            // 3. Setup the Flat Directory Structure
+            // 3. Setup Directory
             std::string cast_uuid = drogon::utils::getUuid();
-            
-            // Get the upload path from config and append the UUID
-            // This ensures we create: public/uploads/<UUID>/
             std::string upload_path_from_config = drogon::app().getUploadPath();
             fs::path root_upload_path(upload_path_from_config);
             fs::path cast_dir = root_upload_path / cast_uuid;
 
             try {
-                // Create the UUID directory only (not directories for the files!)
                 fs::create_directories(cast_dir);
             } catch (const std::exception& e) {
                 LOG_ERROR << "FS Error: " << e.what();
@@ -57,35 +52,34 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                 return;
             }
 
-            // 4. Save files directly into the UUID folder
+            // 4. Save files directly
+            bool has_baseline = false;
             for (auto& file : fileUpload.getFiles()) {
-                std::string itemName = file.getItemName(); // "manifest", "baseline", "recording"
+                std::string itemName = file.getItemName(); 
                 std::string targetName;
 
                 if (itemName == "manifest") targetName = "manifest.json";
-                else if (itemName == "baseline") targetName = "baseline.tar.gz";
+                else if (itemName == "baseline") { targetName = "baseline.tar.gz"; has_baseline = true; }
                 else if (itemName == "recording") targetName = "recording.cast";
-                else targetName = file.getFileName(); // fallback
+                else targetName = file.getFileName(); 
 
-                // Use absolute path for saving to avoid Drogon's internal relative path guessing
                 std::string absolute_save_path = (cast_dir / targetName).string();
                 file.saveAs(absolute_save_path);
             }
 
-            // 5. Update Database
+            std::string baseline_val = has_baseline ? (cast_uuid + "/baseline.tar.gz") : "";
+
+            // 5. Update Database utilizing NULLIF for the empty string fallback
             dbClient->execSqlAsync(
-                "INSERT INTO casts (user_id, manifest_url, baseline_url, recording_url) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO casts (user_id, manifest_url, baseline_url, recording_url) VALUES ($1, $2, NULLIF($3, ''), $4)",
                 [callback, cast_uuid](const drogon::orm::Result& res) {
                     
-                    // --- NEW DYNAMIC URL LOGIC ---
                     const char* env_url = getenv("APP_URL");
                     std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
                     
-                    // Remove trailing slash if present to prevent double slashes
                     if (!base_url.empty() && base_url.back() == '/') {
                         base_url.pop_back();
                     }
-                    // -----------------------------
 
                     Json::Value ret;
                     ret["status"] = "success";
@@ -101,7 +95,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                 },
                 user_id, 
                 cast_uuid + "/manifest.json", 
-                cast_uuid + "/baseline.tar.gz", 
+                baseline_val, 
                 cast_uuid + "/recording.cast"
             );
         },
@@ -126,7 +120,6 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
 
     auto dbClient = drogon::app().getDbClient();
     
-    // Join users and casts to ensure ownership
     dbClient->execSqlAsync(
         "SELECT c.id, c.manifest_url, c.created_at "
         "FROM casts c JOIN users u ON c.user_id = u.id "
@@ -141,7 +134,6 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
             for (auto const& row : r) {
                 Json::Value castObj;
                 std::string manifest_path = row["manifest_url"].as<std::string>();
-                // Extract UUID from manifest path (e.g., "uuid/manifest.json")
                 std::string uuid = manifest_path.substr(0, manifest_path.find('/'));
                 
                 castObj["id"] = uuid;

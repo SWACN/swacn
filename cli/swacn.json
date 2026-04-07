@@ -15,13 +15,6 @@
         "url": "https://github.com/username/my-awesome-cli/releases/download/v1.0.0/mycli-linux-x86_64",
         "install_path": "/usr/local/bin/mycli"
       }
-    ],
-    "wasm32": [
-      {
-        "name": "my-awesome-cli",
-        "url": "https://github.com/username/my-awesome-cli/releases/download/v1.0.0/mycli-wasm32.wasm",
-        "install_path": "/bin/mycli.wasm"
-      }
     ]
   }
 }
