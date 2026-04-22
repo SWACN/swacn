@@ -6,14 +6,9 @@
   "binaries": {
     "x86_64": [
       {
-        "name": "jq",
-        "url": "https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64",
-        "install_path": "/usr/local/bin/jq"
-      },
-      {
-        "name": "my-awesome-cli",
-        "url": "https://github.com/username/my-awesome-cli/releases/download/v1.0.0/mycli-linux-x86_64",
-        "install_path": "/usr/local/bin/mycli"
+        "name": "yq",
+        "url": "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_386",
+        "install_path": "/usr/bin/yq"
       }
     ]
   }

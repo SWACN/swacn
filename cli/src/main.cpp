@@ -198,7 +198,7 @@ void upload_project() {
     }
 }
 
-void launch_asciinema(const std::string& output_file, bool capture_keys, bool capture_fs) {
+void launch_asciinema(const std::string& output_file, bool capture_keys, bool capture_fs, bool overwrite) {
     pid_t pid = fork();
 
     if (pid < 0) {
@@ -210,6 +210,7 @@ void launch_asciinema(const std::string& output_file, bool capture_keys, bool ca
         // Child: Run asciinema
         std::vector<const char*> args = {"asciinema", "rec"};
         if (capture_keys) args.push_back("--stdin");
+        if (overwrite) args.push_back("--overwrite");
         args.push_back(output_file.c_str());
         args.push_back(nullptr);
         
@@ -286,18 +287,20 @@ int main(int argc, char* argv[]) {
     else if (command == "record") {
         bool capture_keys = false;
         bool capture_fs = false;
+        bool overwrite = false;
 
         for (int i = 2; i < argc; ++i) {
             std::string arg = argv[i];
             if (arg == "--keys") capture_keys = true;
             if (arg == "--fs") capture_fs = true;
+            if (arg == "--overwrite") overwrite = true;
         }
 
         if (!prepare_recording_environment(capture_fs)) {
             return 1; 
         }
 
-        launch_asciinema(".swacn/demo.cast", capture_keys, capture_fs);
+        launch_asciinema(".swacn/demo.cast", capture_keys, capture_fs, overwrite);
     }
     else if (command == "upload") {
         upload_project();

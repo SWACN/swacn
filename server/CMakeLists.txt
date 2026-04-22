@@ -13,6 +13,7 @@ set(SRC
     src/main.cpp
     src/controllers/AuthController.cpp
     src/controllers/CastController.cpp
+    src/controllers/ProxyController.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SRC})

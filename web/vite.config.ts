@@ -15,10 +15,37 @@ const crossOriginIsolation = () => ({
   }
 });
 
+// Proxy for downloading external binaries like github releases
+const fetchProxy = () => ({
+  name: 'fetch-proxy',
+  configureServer(server: any) {
+    server.middlewares.use('/dev-proxy', async (req: any, res: any) => {
+      const urlStr = new URL(req.url, 'http://localhost').searchParams.get('url');
+      if (!urlStr) {
+        res.statusCode = 400;
+        res.end('Missing url');
+        return;
+      }
+      try {
+        const fetchRes = await fetch(urlStr, { redirect: 'follow' });
+        if (!fetchRes.ok) throw new Error(`Upstream returned ${fetchRes.status}`);
+        const arrayBuffer = await fetchRes.arrayBuffer();
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.end(Buffer.from(arrayBuffer));
+      } catch (err: any) {
+        console.error('Fetch proxy error:', err);
+        res.statusCode = 500;
+        res.end('Proxy error: ' + err.message);
+      }
+    });
+  }
+});
+
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    plugins: [react(), tailwindcss(), crossOriginIsolation()],
+    plugins: [react(), tailwindcss(), crossOriginIsolation(), fetchProxy()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
@@ -40,6 +67,22 @@ export default defineConfig(({mode}) => {
         '/uploads': {
           target: 'http://127.0.0.1:8080',
           changeOrigin: true
+        },
+        '/v86-assets': {
+          target: 'https://copy.sh',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/v86-assets/, '')
+        },
+        '/i-copy-sh': {
+          target: 'https://i.copy.sh',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/i-copy-sh/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.setHeader('Referer', 'https://copy.sh/v86/');
+              proxyReq.setHeader('Origin', 'https://copy.sh');
+            });
+          }
         }
       }
     },

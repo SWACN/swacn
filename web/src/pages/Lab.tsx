@@ -7,7 +7,7 @@ import 'asciinema-player/dist/bundle/asciinema-player.css';
 import '@xterm/xterm/css/xterm.css';
 
 import { fetchCasts } from '../lib/api';
-import { CheerpXVM, VMStatus } from '../lib/CheerpXVM';
+import { V86VM, VMStatus } from '../lib/V86VM';
 
 type Tab = 'projects' | 'settings';
 type Theme = 'latte' | 'frappe' | 'macchiato' | 'mocha';
@@ -49,6 +49,7 @@ export function Lab() {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<XTerm | null>(null);
 
+  const isDefaultSandbox = !id;
   const manifestUrl = id ? `/uploads/${id}/manifest.json` : null;
   const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz` : null;
   const recordingUrl = id ? `/uploads/${id}/recording.cast` : null;
@@ -67,6 +68,13 @@ export function Lab() {
     }
     setIsSandboxMode(!id);
   }, [id]);
+
+  // Auto-switch to sandbox mode when VM is ready (for default sandbox with no recording)
+  useEffect(() => {
+    if (isDefaultSandbox && vmStatus === 'ready') {
+      setIsSandboxMode(true);
+    }
+  }, [vmStatus, isDefaultSandbox]);
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
@@ -119,7 +127,7 @@ export function Lab() {
     xtermInstance.current = term;
     term.open(terminalRef.current);
     
-    const vm = new CheerpXVM(term);
+    const vm = new V86VM(term);
     vm.boot(manifestUrl, baselineUrl, (status) => setVmStatus(status));
 
     return () => {
@@ -284,7 +292,9 @@ export function Lab() {
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 ${isSandboxMode ? 'bg-green-500 animate-pulse' : 'bg-primary'}`}></div>
             <span className="font-mono text-sm font-bold uppercase tracking-tighter">
-              {id ? (isSandboxMode ? `INTERACTIVE: ${id.split('-')[0]}` : `PLAYBACK: ${id.split('-')[0]}`) : 'ISOLATED SANDBOX'}
+            {id 
+              ? (isSandboxMode ? `INTERACTIVE: ${id.split('-')[0]}` : `PLAYBACK: ${id.split('-')[0]}`) 
+              : 'BASE SANDBOX'}
             </span>
           </div>
           
