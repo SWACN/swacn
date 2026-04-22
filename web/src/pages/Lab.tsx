@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
 import 'asciinema-player/dist/bundle/asciinema-player.css';
 import '@xterm/xterm/css/xterm.css';
@@ -48,6 +49,7 @@ export function Lab() {
   const playerInstance = useRef<any>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<XTerm | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
 
   const isDefaultSandbox = !id;
   const manifestUrl = id ? `/uploads/${id}/manifest.json` : null;
@@ -124,19 +126,45 @@ export function Lab() {
       convertEol: true,
     });
 
+    const fitAddon = new FitAddon();
+    fitAddonRef.current = fitAddon;
+    term.loadAddon(fitAddon);
+
     xtermInstance.current = term;
     term.open(terminalRef.current);
+    
+    // Initial fit attempt
+    setTimeout(() => {
+      if (isSandboxMode) fitAddon.fit();
+    }, 100);
     
     const vm = new V86VM(term);
     vm.boot(manifestUrl, baselineUrl, (status) => setVmStatus(status));
 
+    const handleResize = () => {
+      if (isSandboxMode) {
+        fitAddon.fit();
+        vm.setTerminalSize(term.cols, term.rows);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
       vm.dispose();
       term.dispose();
       xtermInstance.current = null;
+      fitAddonRef.current = null;
     };
   }, [id]); 
 
+  // Re-fit when switching to sandbox mode (terminal becomes visible)
+  useEffect(() => {
+    if (isSandboxMode && xtermInstance.current && fitAddonRef.current) {
+      fitAddonRef.current.fit();
+    }
+  }, [isSandboxMode]);
   // Sync XTerm Theme dynamically
   useEffect(() => {
     if (xtermInstance.current) {
@@ -343,12 +371,12 @@ export function Lab() {
             </div>
           )}
 
-          {/* Unified Padded Container for edge-to-edge alignment */}
-          <div className={`absolute inset-0 p-4 z-20 ${isSandboxMode ? 'hidden' : 'block'}`}>
+          {/* Unified Containers with maintained dimensions for silent terminal fitting */}
+          <div className={`absolute inset-0 p-2 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex" />
           </div>
 
-          <div className={`absolute inset-0 p-4 z-10 ${isSandboxMode ? 'block' : 'hidden'}`}>
+          <div className={`absolute inset-0 p-2 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <div ref={terminalRef} className="w-full h-full overflow-hidden flex" />
           </div>
           

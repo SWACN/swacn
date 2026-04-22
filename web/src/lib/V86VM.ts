@@ -68,7 +68,7 @@ export class V86VM {
         resolve(cleanOutput);
       };
       
-      const fullCmd = `${cmd}\nprintf "${this.currentMarker}"\n`;
+      const fullCmd = `${cmd} ; printf "${this.currentMarker}"\n`;
       for (let i = 0; i < fullCmd.length; i++) {
         this.emulator?.serial0_send(fullCmd[i]);
         // Small delay to prevent buffer overflow in v86 serial port
@@ -150,9 +150,7 @@ export class V86VM {
         if (!manifestRes.ok) throw new Error(`Manifest error: ${manifestRes.status}`);
         const manifest = await manifestRes.json();
         
-        if (manifest.env) {
-          manifestEnv = manifest.env;
-        }
+        manifestEnv = manifest.env ?? manifest.environment?.env ?? {};
 
         if (manifest.baseline && baselineUrl) {
           onStatus('downloading_baseline');
@@ -212,15 +210,16 @@ export class V86VM {
       console.log("[V86VM] Configuring shell environment");
       // 2. Write env vars to /etc/profile.d so they persist in all shells
       if (Object.keys(manifestEnv).length > 0) {
-        await this.execWait(`mkdir -p /etc/profile.d`);
+        await this.execWait(`mkdir -p /etc/profile.d && rm -f /etc/profile.d/swacn.sh`);
         for (const [key, value] of Object.entries(manifestEnv)) {
-          await this.execWait(`echo 'export ${key}="${value}"' > /etc/profile.d/swacn.sh`);
+          await this.execWait(`echo 'export ${key}="${value}"' >> /etc/profile.d/swacn.sh`);
         }
         await this.execWait(`. /etc/profile.d/swacn.sh`);
       }
 
-      // Set PS1 and re-enable echo both via execWait — fully synchronous, no bleed
+      // Set PS1 and terminal size before enabling echo — fully silent
       await this.execWait("export PS1='swacn@sandbox:~$ '");
+      await this.execWait(`stty cols ${this.xterm.cols} rows ${this.xterm.rows}`);
       await this.execWait("stty echo");
 
       // Drain any remaining in-flight v86 serial bytes into outputBuffer
@@ -238,9 +237,9 @@ export class V86VM {
         this.xterm.write(readmeContent.trim() + "\r\n\r\n" + PROMPT);
       } else if (!manifestUrl) {
         this.xterm.write("\r\n\x1b[1;36m  ╔═══════════════════════════════════════╗\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[1;37mSWACN Base Sandbox\x1b[1;36m                  ║\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mLinux i686 · Buildroot · BusyBox\x1b[1;36m    ║\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mNo project loaded · Pure environment\x1b[1;36m║\x1b[0m\r\n");
+        this.xterm.write("\x1b[1;36m  ║  \x1b[1;37mSWACN Base Sandbox\x1b[1;36m                   ║\x1b[0m\r\n");
+        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mLinux i686 · Buildroot · BusyBox\x1b[1;36m     ║\x1b[0m\r\n");
+        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mNo project loaded · Pure environment\x1b[1;36m ║\x1b[0m\r\n");
         this.xterm.write("\x1b[1;36m  ╚═══════════════════════════════════════╝\x1b[0m\r\n\r\n" + PROMPT);
       } else {
         this.xterm.write(PROMPT);
@@ -249,6 +248,7 @@ export class V86VM {
       // Switch to interactive mode — NO serial send.
       // Shell is idle and waiting. User's first keypress drives it from here.
       this.isInteractiveMode = true;
+
 
       // 6. Hook up the listener
       this.dataListener = this.xterm.onData((data) => {
@@ -261,6 +261,18 @@ export class V86VM {
     } catch (e) {
       console.error("[V86VM] Boot failed!", e);
       onStatus('error');
+    }
+  }
+
+  public setTerminalSize(cols?: number, rows?: number) {
+    if (!this.emulator || !this.isInteractiveMode) return;
+    const c = cols ?? this.xterm.cols;
+    const r = rows ?? this.xterm.rows;
+    // Update the VM's shell about the new terminal size
+    // Silence the command as much as possible by wrapping it in stty -echo
+    const cmd = ` stty -echo; stty cols ${c} rows ${r}; stty echo\n`;
+    for (let i = 0; i < cmd.length; i++) {
+      this.emulator.serial0_send(cmd[i]);
     }
   }
 
