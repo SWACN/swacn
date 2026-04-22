@@ -111,7 +111,6 @@ bool prepare_recording_environment(bool capture_fs) {
     json manifest_json;
     manifest_json["version"] = "0.1.0";
     manifest_json["timestamp"] = std::time(nullptr);
-    manifest_json["recording"] = "demo.cast";
 
     if (capture_fs) {
         std::string tar_cmd = "env COPYFILE_DISABLE=1 tar -czf .swacn/baseline.tar.gz "
@@ -155,10 +154,9 @@ void upload_project() {
     }
 
     fs::path manifest_path = ".swacn/manifest.json";
-    fs::path cast_path = ".swacn/demo.cast";
 
-    if (!fs::exists(manifest_path) || !fs::exists(cast_path)) {
-        std::cerr << "[swacn] Error: Missing manifest.json or demo.cast in .swacn/. Cannot upload.\n";
+    if (!fs::exists(manifest_path)) {
+        std::cerr << "[swacn] Error: Missing manifest.json in .swacn/. Cannot upload.\n";
         return;
     }
 
@@ -174,7 +172,11 @@ void upload_project() {
 
     cpr::Multipart multipart_data{};
     multipart_data.parts.push_back(cpr::Part{"manifest", cpr::File{manifest_path.string()}});
-    multipart_data.parts.push_back(cpr::Part{"recording", cpr::File{cast_path.string()}});
+    
+    fs::path cast_path = ".swacn/demo.cast";
+    if (fs::exists(cast_path)) {
+        multipart_data.parts.push_back(cpr::Part{"recording", cpr::File{cast_path.string()}});
+    }
 
     if (manifest_json.contains("baseline")) {
         fs::path baseline_path = ".swacn/" + manifest_json["baseline"].get<std::string>();
@@ -289,18 +291,24 @@ int main(int argc, char* argv[]) {
         bool capture_fs = false;
         bool overwrite = false;
 
+        bool no_rec = false;
         for (int i = 2; i < argc; ++i) {
             std::string arg = argv[i];
             if (arg == "--keys") capture_keys = true;
             if (arg == "--fs") capture_fs = true;
             if (arg == "--overwrite") overwrite = true;
+            if (arg == "--norec") no_rec = true;
         }
 
         if (!prepare_recording_environment(capture_fs)) {
             return 1; 
         }
 
-        launch_asciinema(".swacn/demo.cast", capture_keys, capture_fs, overwrite);
+        if (!no_rec) {
+            launch_asciinema(".swacn/demo.cast", capture_keys, capture_fs, overwrite);
+        } else {
+            std::cout << "[swacn] Setup complete (no recording requested).\n";
+        }
     }
     else if (command == "upload") {
         upload_project();

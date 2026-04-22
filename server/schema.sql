@@ -14,6 +14,8 @@ CREATE TABLE casts (
     project_name VARCHAR(255),
     manifest_url TEXT NOT NULL,
     baseline_url TEXT,
-    recording_url TEXT NOT NULL,
+    recording_url TEXT,
+    theme VARCHAR(255) DEFAULT 'mocha',
+    show_keystrokes BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

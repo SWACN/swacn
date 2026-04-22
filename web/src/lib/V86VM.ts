@@ -23,6 +23,7 @@ export class V86VM {
   private resolveCommand: (() => void) | null = null;
   private currentMarker: string | null = null;
   private isInteractiveMode = false;
+  private abortController: AbortController | null = null;
   private hasPrompt = false;
   private hasBooted = false;
 
@@ -91,14 +92,17 @@ export class V86VM {
   public async boot(
     manifestUrl: string | null, 
     baselineUrl: string | null, 
-    onStatus: (status: VMStatus) => void
+    onStatus: (status: VMStatus) => void,
+    onManifest?: (manifest: any) => void
   ) {
     // Guard against React Strict Mode double-invocation
     if (this.hasBooted) {
-      console.warn("[V86VM] boot() called again on same instance — ignoring.");
+      console.warn("[V86VM] Already booted. Dispose first.");
       return;
     }
     this.hasBooted = true;
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
     onStatus('initializing');
 
     try {
@@ -146,11 +150,12 @@ export class V86VM {
       let manifestEnv: Record<string, string> = {};
 
       if (manifestUrl) {
-        const manifestRes = await fetch(manifestUrl);
+        const manifestRes = await fetch(manifestUrl, { signal });
         if (!manifestRes.ok) throw new Error(`Manifest error: ${manifestRes.status}`);
         const manifest = await manifestRes.json();
         
         manifestEnv = manifest.env ?? manifest.environment?.env ?? {};
+        if (onManifest) onManifest(manifest);
 
         if (manifest.baseline && baselineUrl) {
           onStatus('downloading_baseline');
@@ -198,12 +203,12 @@ export class V86VM {
 
       // --- THE CLEAN HANDOVER ---
 
-      console.log("[V86VM] Capturing README");
-      // 1. Capture README content (only meaningful if manifest was loaded)
-      const readmeContent = manifestUrl 
-        ? await this.execWait("cat README.md 2>/dev/null || cat README 2>/dev/null")
+      console.log("[V86VM] Capturing welcome message");
+      // 1. Capture welcome message (only meaningful if manifest was loaded)
+      const welcomeContent = manifestUrl 
+        ? await this.execWait("cat welcome.txt 2>/dev/null")
         : null;
-      console.log("[V86VM] README captured:", readmeContent);
+      console.log("[V86VM] Welcome message captured:", welcomeContent);
 
       if (!this.emulator) return;
 
@@ -233,14 +238,10 @@ export class V86VM {
       console.log("[V86VM] Handover");
       const PROMPT = "swacn@sandbox:~$ ";
 
-      if (readmeContent && readmeContent.trim().length > 0) {
-        this.xterm.write(readmeContent.trim() + "\r\n\r\n" + PROMPT);
+      if (welcomeContent && welcomeContent.trim().length > 0) {
+        this.xterm.write(welcomeContent.trim() + "\r\n\r\n" + PROMPT);
       } else if (!manifestUrl) {
-        this.xterm.write("\r\n\x1b[1;36m  ╔═══════════════════════════════════════╗\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[1;37mSWACN Base Sandbox\x1b[1;36m                   ║\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mLinux i686 · Buildroot · BusyBox\x1b[1;36m     ║\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ║  \x1b[0;37mNo project loaded · Pure environment\x1b[1;36m ║\x1b[0m\r\n");
-        this.xterm.write("\x1b[1;36m  ╚═══════════════════════════════════════╝\x1b[0m\r\n\r\n" + PROMPT);
+        this.xterm.write(PROMPT);
       } else {
         this.xterm.write(PROMPT);
       }
@@ -258,7 +259,8 @@ export class V86VM {
 
       console.log("[V86VM] Boot sequence complete!");
       onStatus('ready');
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return;
       console.error("[V86VM] Boot failed!", e);
       onStatus('error');
     }
@@ -277,6 +279,7 @@ export class V86VM {
   }
 
   public dispose() {
+    if (this.abortController) this.abortController.abort();
     if (this.dataListener) this.dataListener.dispose();
     if (this.emulator) this.emulator.stop();
     this.emulator = null;

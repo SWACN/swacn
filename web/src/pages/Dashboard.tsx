@@ -42,7 +42,7 @@ export function Dashboard() {
               </span>
             </div>
             
-            <h3 className="font-mono font-bold text-lg mb-2 truncate">{cast.id.split('-')[0]}-env</h3>
+            <h3 className="font-mono font-bold text-lg mb-2 truncate">{cast.name || cast.id.split('-')[0]}</h3>
             
             <div className="flex items-center gap-2 mt-4 pt-4 border-t-2 border-on-surface opacity-60 font-mono text-xs">
               <Clock size={14} />

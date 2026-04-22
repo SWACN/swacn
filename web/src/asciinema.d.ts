@@ -22,7 +22,8 @@ declare module 'asciinema-player' {
     play(): void;
     pause(): void;
     dispose(): void;
-    addEventListener(event: string, callback: () => void): void;
+    getCurrentTime(): number;
+    addEventListener(event: string, callback: (data?: any) => void): void;
   }
 
   export function create(

@@ -24,6 +24,6 @@
 }
 
 .hard-shadow {
-  box-shadow: 4px 4px 0px 0px rgba(28, 28, 23, 0.2);
+  box-shadow: 4px 4px 0px 0px var(--color-on-surface);
 }
 
