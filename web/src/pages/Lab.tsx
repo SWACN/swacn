@@ -11,9 +11,11 @@ import { fetchCasts, fetchCastDetails, updateCastSettings } from '../lib/api';
 import { V86VM, VMStatus } from '../lib/V86VM';
 
 type Tab = 'projects' | 'settings';
-type Theme = 'latte' | 'frappe' | 'macchiato' | 'mocha';
+type Theme = 'latte' | 'frappe' | 'macchiato' | 'mocha' | 'swacn' | 'swacn-dark';
 
-const CATPPUCCIN = {
+const TERMINAL_THEMES = {
+  swacn: { fg: "#1c1c17", bg: "#fcf9f0", palette: "#1c1c17:#a33030:#4a7023:#b3821a:#355c82:#804d7c:#338580:#ebe8df:#5a5a52:#a33030:#4a7023:#b3821a:#355c82:#804d7c:#338580:#ffffff" },
+  'swacn-dark': { fg: "#fcf9f0", bg: "#1c1c17", palette: "#40403a:#e05c5c:#7ca84d:#d6a63c:#5380a6:#a66b9e:#4da6a0:#ebe8df:#5a5a52:#e05c5c:#7ca84d:#d6a63c:#5380a6:#a66b9e:#4da6a0:#ffffff" },
   latte: { fg: "#4c4f69", bg: "#eff1f5", palette: "#5c5f77:#d20f39:#40a02b:#df8e1d:#1e66f5:#ea76cb:#179299:#acb0be:#6c6f85:#d20f39:#40a02b:#df8e1d:#1e66f5:#ea76cb:#179299:#bcc0cc" },
   frappe: { fg: "#c6d0f5", bg: "#303446", palette: "#51576d:#e78284:#a6d189:#e5c890:#8caaee:#f4b8e4:#81c8be:#b5bfe2:#626880:#e78284:#a6d189:#e5c890:#8caaee:#f4b8e4:#81c8be:#a5adce" },
   macchiato: { fg: "#cad3f5", bg: "#24273a", palette: "#494d64:#ed8796:#a6da95:#eed49f:#8aadf4:#f5bde6:#8bd5ca:#b8c0e0:#5b6078:#ed8796:#a6da95:#eed49f:#8aadf4:#f5bde6:#8bd5ca:#a5adcb" },
@@ -22,7 +24,7 @@ const CATPPUCCIN = {
 
 const getXtermTheme = (themeName: Theme) => {
   // Fallback protection against corrupted localStorage state
-  const t = CATPPUCCIN[themeName] || CATPPUCCIN['mocha'];
+  const t = TERMINAL_THEMES[themeName] || TERMINAL_THEMES['swacn-dark'];
   const p = t.palette.split(':');
   return {
     background: '#00000000', // 8-digit hex for WebGL true transparency
@@ -40,7 +42,7 @@ export function Lab() {
   const isEmbed = searchParams.get('embed') === 'true';
   
   const [activeTab, setActiveTab] = useState<Tab>('projects');
-  const [theme, setTheme] = useState<Theme>('mocha');
+  const [theme, setTheme] = useState<Theme>('swacn-dark');
   const [projects, setProjects] = useState<any[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -84,10 +86,10 @@ export function Lab() {
 
     if (id) {
       fetchCastDetails(id).then(details => {
-        if (CATPPUCCIN[details.theme as Theme]) {
+        if (TERMINAL_THEMES[details.theme as Theme]) {
           setTheme(details.theme as Theme);
         } else {
-          setTheme('mocha');
+          setTheme('swacn-dark');
         }
         setShowKeystrokes(details.show_keystrokes);
         setHasRecording(details.has_recording);
@@ -100,7 +102,7 @@ export function Lab() {
       });
     } else {
       // Base Sandbox: always interactive, no recording
-      setTheme('mocha');
+      setTheme('swacn-dark');
       setShowKeystrokes(false);
       setHasRecording(false);
       setIsSandboxMode(true);
@@ -394,13 +396,12 @@ export function Lab() {
     return steps[status] || 0;
   };
 
-  // Safe fallback for Catppuccin themes
-  const currentCatTheme = CATPPUCCIN[theme] || CATPPUCCIN['mocha'];
-  const currentPalette = currentCatTheme.palette.split(':');
-  const isDarkTheme = theme !== 'latte';
-
+  // Safe fallback for terminal themes
+  const currentThemeConfig = TERMINAL_THEMES[theme] || TERMINAL_THEMES['swacn-dark'];
+  const currentPalette = currentThemeConfig.palette.split(':');
+  const isDarkTheme = theme !== 'latte' && theme !== 'swacn';
   return (
-    <div className={`flex-grow flex flex-col md:flex-row border-on-surface relative overflow-hidden ${isEmbed ? 'h-full border-b-0 bg-background' : 'h-[calc(100vh-160px)] border-b-4'}`}>
+    <div className={`flex-grow flex flex-col md:flex-row relative ${isEmbed ? 'h-full border-b-0 bg-background overflow-hidden' : 'w-full px-4 md:px-8 lg:px-16 xl:px-24 pb-4 md:pb-8 h-[calc(100vh-6rem)] md:h-[calc(100vh-8rem)]'}`}>
       
       <style>{`
         /* 1. AGGRESSIVE ASCIINEMA STRUCTURAL NUKE */
@@ -425,12 +426,12 @@ export function Lab() {
           align-items: flex-start !important;
         }
 
-        /* 2. DYNAMIC CATPPUCCIN INJECTION
+        /* 2. DYNAMIC THEME INJECTION
            These map directly into Asciinema's internal rendering engine natively. 
         */
         .ap-wrapper, .ap-player, .ap-terminal {
           --term-color-background: transparent !important;
-          --term-color-foreground: ${currentCatTheme.fg} !important;
+          --term-color-foreground: ${currentThemeConfig.fg} !important;
           --term-color-0: ${currentPalette[0]} !important;
           --term-color-1: ${currentPalette[1]} !important;
           --term-color-2: ${currentPalette[2]} !important;
@@ -465,289 +466,294 @@ export function Lab() {
         }
       `}</style>
 
-      {/* Mobile Backdrop */}
-      {!isEmbed && (
-        <div 
-          className={`md:hidden absolute inset-0 bg-black/50 z-30 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {/* Main Tactile Panel for Lab */}
+      <div className={`flex flex-col relative w-full h-full ${!isEmbed ? 'border-4 border-on-surface bg-transparent hard-shadow overflow-hidden' : 'overflow-hidden'}`}>
 
-      {!isEmbed && (
-      <aside className={`absolute md:relative z-40 h-full bg-background border-on-surface flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isSidebarOpen ? 'w-4/5 md:w-80 border-r-4 translate-x-0' : 'w-0 border-r-0 -translate-x-full md:translate-x-0'}`}>
-        <div className="w-[80vw] md:w-80 h-full flex flex-col flex-shrink-0">
+        {/* Mobile Backdrop */}
+        {!isEmbed && (
+          <div 
+            className={`absolute inset-0 bg-on-surface/40 backdrop-blur-sm z-30 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
 
+        {/* Overlapping Drawer Sidebar */}
+        {!isEmbed && (
+        <aside className={`absolute top-14 left-0 bottom-0 z-40 bg-surface-container-high border-r-4 border-on-surface flex flex-col transition-transform duration-300 ease-in-out w-4/5 md:w-80 hard-shadow ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}>
+          <div className="w-full h-full flex flex-col flex-shrink-0">
 
-        <div className="flex-grow relative overflow-hidden">
-          {/* Projects Tab */}
-          <div className={`absolute inset-0 p-4 overflow-y-auto transition-all duration-300 ease-in-out ${activeTab === 'projects' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 -translate-x-2 pointer-events-none -z-10'}`}>
-            <div className="space-y-4">
-              <h2 className="font-headline font-bold text-xs uppercase tracking-widest text-primary mb-4">Workspaces</h2>
-              
-              <div 
-                onClick={() => navigate('/lab')}
-                className={`p-3 border-2 border-on-surface cursor-pointer font-mono text-sm flex items-center gap-3 ${!id ? 'bg-surface-container-high hard-shadow' : 'hover:bg-surface-container-low'}`}
-              >
-                <SquareTerminal size={16} /> Base Sandbox
-              </div>
-
-                {projects.map(p => (
-                  <div 
-                    key={p.id}
-                    onClick={() => navigate(`/lab/${p.id}`)}
-                    className={`p-3 border-2 border-on-surface cursor-pointer font-mono text-sm flex items-center gap-3 ${id === p.id ? 'bg-surface-container-high hard-shadow' : 'hover:bg-surface-container-low'}`}
-                  >
-                    <ListVideo size={16} className="text-primary" /> 
-                    <span className="truncate">{p.name || p.id.split('-')[0]}</span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {/* Settings Tab */}
-          <div className={`absolute inset-0 p-4 overflow-y-auto transition-all duration-300 ease-in-out ${activeTab === 'settings' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 translate-x-2 pointer-events-none -z-10'}`}>
-            <div className="space-y-8">
-              <div>
-                <h2 className="font-headline font-bold text-xs uppercase tracking-widest text-primary mb-4 flex items-center gap-2"><Palette size={16}/> Embed Theme</h2>
-                <div className="space-y-2 font-mono text-sm capitalize">
-                  {(Object.keys(CATPPUCCIN) as Theme[]).map(t => (
-                    <label key={t} className="flex items-center gap-3 p-2 border-2 border-transparent hover:border-on-surface cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="theme" 
-                        checked={theme === t} 
-                        onChange={() => handleThemeChange(t)}
-                        className="accent-primary"
-                      />
-                      {t}
-                    </label>
-                  ))}
+          <div className="flex-grow relative overflow-hidden">
+            {/* Projects Tab */}
+            <div className={`absolute inset-0 p-6 overflow-y-auto transition-all duration-300 ease-in-out ${activeTab === 'projects' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 -translate-x-2 pointer-events-none -z-10'}`}>
+              <div className="space-y-4">
+                <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2">Workspaces</h2>
+                
+                <div 
+                  onClick={() => navigate('/lab')}
+                  className={`p-4 border-2 border-on-surface cursor-pointer font-mono text-sm flex items-center gap-3 transition-colors ${!id ? 'bg-primary text-white hard-shadow' : 'bg-white hover:bg-surface-container-low'}`}
+                >
+                  <SquareTerminal size={18} className={!id ? 'text-white' : 'text-primary'} /> 
+                  <span className="font-bold">Base Sandbox</span>
                 </div>
-              </div>
 
-              <div className={(!hasRecording || recordedKeys.length === 0) ? 'opacity-50 grayscale pointer-events-none' : ''}>
-                <h2 className="font-headline font-bold text-xs uppercase tracking-widest text-primary mb-4 flex items-center gap-2"><SquareTerminal size={16}/> Keystroke HUD</h2>
-                <label className="flex items-center gap-3 p-2 border-2 border-transparent hover:border-on-surface cursor-pointer font-mono text-sm">
-                  <input 
-                    type="checkbox" 
-                    checked={showKeystrokes} 
-                    onChange={(e) => handleKeystrokesChange(e.target.checked)}
-                    disabled={!hasRecording || recordedKeys.length === 0}
-                    className="accent-primary w-4 h-4"
-                  />
-                  Show Keystroke Overlay
-                </label>
+                  {projects.map(p => (
+                    <div 
+                      key={p.id}
+                      onClick={() => navigate(`/lab/${p.id}`)}
+                      className={`p-4 border-2 border-on-surface cursor-pointer font-mono text-sm flex items-center gap-3 transition-colors ${id === p.id ? 'bg-primary text-white hard-shadow' : 'bg-white hover:bg-surface-container-low'}`}
+                    >
+                      <ListVideo size={18} className={id === p.id ? 'text-white' : 'text-primary'} /> 
+                      <span className="truncate font-bold">{p.name || p.id.split('-')[0]}</span>
+                    </div>
+                  ))}
               </div>
- 
+            </div>
+
+            {/* Settings Tab */}
+            <div className={`absolute inset-0 p-6 overflow-y-auto transition-all duration-300 ease-in-out ${activeTab === 'settings' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 translate-x-2 pointer-events-none -z-10'}`}>
+              <div className="space-y-10">
+                <div>
+                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Palette size={20}/> Embed Theme</h2>
+                  <div className="space-y-3 font-mono text-sm capitalize">
+                    {(Object.keys(TERMINAL_THEMES) as Theme[]).map(t => (
+                      <label key={t} className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors">
+                        <input 
+                          type="radio" 
+                          name="theme" 
+                          checked={theme === t} 
+                          onChange={() => handleThemeChange(t)}
+                          className="accent-primary w-4 h-4"
+                        />
+                        <span className="font-bold">{t}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={(!hasRecording || recordedKeys.length === 0) ? 'opacity-50 grayscale pointer-events-none' : ''}>
+                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><SquareTerminal size={20}/> Keystroke HUD</h2>
+                  <label className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors font-mono text-sm">
+                    <input 
+                      type="checkbox" 
+                      checked={showKeystrokes} 
+                      onChange={(e) => handleKeystrokesChange(e.target.checked)}
+                      disabled={!hasRecording || recordedKeys.length === 0}
+                      className="accent-primary w-4 h-4"
+                    />
+                    <span className="font-bold">Show Overlay</span>
+                  </label>
+                </div>
+   
+               </div>
              </div>
            </div>
-         </div>
-        </div>
-      </aside>
-      )}
-
-      <section className="flex-grow flex flex-col relative overflow-hidden">
-        
-        {!isEmbed && (
-        <div className="p-3 border-b-4 border-on-surface bg-background flex justify-between items-center z-10 h-14">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <button 
-                onClick={() => {
-                  if (activeTab === 'projects' && isSidebarOpen) setIsSidebarOpen(false);
-                  else { setActiveTab('projects'); setIsSidebarOpen(true); }
-                }}
-                className={`p-1.5 rounded transition-colors ${activeTab === 'projects' && isSidebarOpen ? 'bg-primary text-white' : 'hover:bg-surface-container-high text-primary'}`}
-                title="Workspaces"
-              >
-                <ListVideo size={18} />
-              </button>
-              <button 
-                onClick={() => {
-                  if (activeTab === 'settings' && isSidebarOpen) setIsSidebarOpen(false);
-                  else { setActiveTab('settings'); setIsSidebarOpen(true); }
-                }}
-                className={`p-1.5 rounded transition-colors ${activeTab === 'settings' && isSidebarOpen ? 'bg-primary text-white' : 'hover:bg-surface-container-high text-primary'}`}
-                title="Settings"
-              >
-                <Settings size={18} />
-              </button>
-            </div>
-            <div className="w-px h-6 bg-on-surface opacity-20"></div>
-            <span className="font-mono text-sm font-bold uppercase tracking-tighter truncate max-w-[200px] sm:max-w-none">
-            {id 
-              ? (projectName || projects.find(p => p.id === id)?.name || id.split('-')[0])
-              : 'BASE SANDBOX'}
-            </span>
           </div>
-        </div>
-        )}
-        
-        {/* Embed macOS-style Title Bar */}
-        {isEmbed && (
-          <div className="h-8 bg-surface-container-high border-b-2 border-on-surface flex items-center px-4 shrink-0">
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 border border-on-surface"></div>
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-on-surface"></div>
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500 border border-on-surface"></div>
-            </div>
-            <div className="absolute left-1/2 -translate-x-1/2 font-mono text-[10px] font-bold tracking-widest uppercase text-on-surface/50">
-              {projectName || id?.split('-')[0]}
-            </div>
-          </div>
+        </aside>
         )}
 
-        {/* Core Viewport Background */}
-        <div 
-          key={id || 'base'}
-          className="flex-grow w-full relative" 
-          onContextMenu={handleContextMenu}
-          style={{ 
-            backgroundColor: currentCatTheme.bg,
-            color: currentCatTheme.fg,
-          } as React.CSSProperties}
-        >
+        <section className="flex-grow flex flex-col relative overflow-hidden bg-transparent">
           
-          <div className="absolute top-4 right-6 z-50">
-            {isSandboxMode && hasRecording && !isDefaultSandbox ? (
-              <button 
-                onClick={handleReturnToPlayback} 
-                className={`bg-transparent backdrop-blur-[2px] border-2 px-4 py-2 font-mono text-xs font-bold uppercase transition-colors hard-shadow flex items-center gap-2 ${
-                  isDarkTheme 
-                    ? 'text-white border-white/30 hover:bg-white hover:text-black' 
-                    : 'text-black border-black/30 hover:bg-black hover:text-white'
-                }`}
-              >
-                <XCircle size={14} /> Exit Sandbox
-              </button>
-            ) : (
-              // Show loading button if not ready, or "Try Now" if a project is loaded but not yet interactive
-              (vmStatus !== 'ready' || (!isSandboxMode && hasRecording && !isDefaultSandbox)) && (
-                <div className={`group relative flex ${vmStatus !== 'ready' ? 'min-w-[160px]' : ''}`}>
-                  <button 
-                    onClick={vmStatus === 'ready' ? handleTryNow : undefined}
-                    disabled={vmStatus !== 'ready' && !isEmbed}
-                    className={`relative overflow-hidden border-2 border-on-surface px-4 py-2 font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 hard-shadow
-                      ${vmStatus === 'ready' 
-                        ? 'bg-primary text-white hover:translate-y-[2px] hover:translate-x-[2px] cursor-pointer' 
-                        : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
-                  >
-                    {/* Progress Fill Layer */}
-                    <div 
-                      className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
-                      style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.4 }}
-                    />
+          {!isEmbed && (
+          <div className="px-4 py-3 border-b-4 border-on-surface bg-surface-container-high flex justify-between items-center z-10 h-16 shrink-0 relative">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    if (activeTab === 'projects' && isSidebarOpen) setIsSidebarOpen(false);
+                    else { setActiveTab('projects'); setIsSidebarOpen(true); }
+                  }}
+                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'projects' && isSidebarOpen ? 'bg-primary text-white border-on-surface hard-shadow' : 'hover:bg-white text-on-surface'}`}
+                  title="Workspaces"
+                >
+                  <ListVideo size={20} />
+                </button>
+                <button 
+                  onClick={() => {
+                    if (activeTab === 'settings' && isSidebarOpen) setIsSidebarOpen(false);
+                    else { setActiveTab('settings'); setIsSidebarOpen(true); }
+                  }}
+                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'settings' && isSidebarOpen ? 'bg-primary text-white border-on-surface hard-shadow' : 'hover:bg-white text-on-surface'}`}
+                  title="Settings"
+                >
+                  <Settings size={20} />
+                </button>
+              </div>
+              <div className="w-px h-8 bg-on-surface opacity-30"></div>
+              <span className="font-mono text-sm md:text-base font-bold uppercase tracking-tighter truncate max-w-[200px] sm:max-w-none">
+              {id 
+                ? (projectName || projects.find(p => p.id === id)?.name || id.split('-')[0])
+                : 'BASE SANDBOX'}
+              </span>
+            </div>
+          </div>
+          )}
+          
+          {/* Embed macOS-style Title Bar */}
+          {isEmbed && (
+            <div className="h-10 bg-surface-container-high border-b-4 border-on-surface flex items-center px-4 shrink-0 relative z-10">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-on-surface"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-on-surface"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-on-surface"></div>
+              </div>
+              <div className="absolute left-1/2 -translate-x-1/2 font-mono text-xs font-bold tracking-widest uppercase text-on-surface">
+                {projectName || id?.split('-')[0]}
+              </div>
+            </div>
+          )}
 
-                    <span className="relative z-10 flex items-center justify-center gap-2 whitespace-nowrap">
-                      {vmStatus === 'ready' ? (
-                        <><SquareTerminal size={14} /> Try Now</>
-                      ) : vmStatus === 'error' ? (
-                        <><div className="w-2 h-2 bg-red-500 rounded-full"></div> Engine Failed</>
-                      ) : (
-                        <>{formatStatus(vmStatus)}...</>
-                      )}
-                    </span>
-                  </button>
-
-                  {/* Embed Hover Override */}
-                  {isEmbed && vmStatus !== 'ready' && vmStatus !== 'error' && (
-                    <a 
-                      href={`/lab/${id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-2 border-on-surface flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase transition-opacity duration-300 hard-shadow z-20 whitespace-nowrap"
+          {/* Core Viewport Background */}
+          <div 
+            key={id || 'base'}
+            className="flex-grow w-full relative" 
+            onContextMenu={handleContextMenu}
+            style={{ 
+              backgroundColor: currentThemeConfig.bg,
+              color: currentThemeConfig.fg,
+            } as React.CSSProperties}
+          >
+            
+            <div className="absolute top-6 right-8 z-30">
+              {isSandboxMode && hasRecording && !isDefaultSandbox ? (
+                <button 
+                  onClick={handleReturnToPlayback} 
+                  className={`bg-transparent backdrop-blur-[2px] border-4 px-4 py-2 font-mono text-xs font-bold uppercase transition-all hard-shadow flex items-center gap-2 ${
+                    isDarkTheme 
+                      ? 'text-white border-white/30 hover:bg-white hover:text-black hover:-translate-y-1 hover:-translate-x-1' 
+                      : 'text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-1 hover:-translate-x-1'
+                  }`}
+                >
+                  <XCircle size={16} /> Exit Sandbox
+                </button>
+              ) : (
+                // Show loading button if not ready, or "Try Now" if a project is loaded but not yet interactive
+                (vmStatus !== 'ready' || (!isSandboxMode && hasRecording && !isDefaultSandbox)) && (
+                  <div className={`group relative flex ${vmStatus !== 'ready' ? 'min-w-[160px]' : ''}`}>
+                    <button 
+                      onClick={vmStatus === 'ready' ? handleTryNow : undefined}
+                      disabled={vmStatus !== 'ready' && !isEmbed}
+                      className={`relative overflow-hidden border-4 border-on-surface px-6 py-3 font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-3 hard-shadow
+                        ${vmStatus === 'ready' 
+                          ? 'bg-primary text-white hover:-translate-y-1 hover:-translate-x-1 cursor-pointer' 
+                          : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
                     >
-                      Open in SWACN <ExternalLink size={14} />
-                    </a>
-                  )}
-                </div>
-              )
+                      {/* Progress Fill Layer */}
+                      <div 
+                        className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
+                        style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.2 }}
+                      />
+
+                      <span className="relative z-10 flex items-center justify-center gap-2 whitespace-nowrap">
+                        {vmStatus === 'ready' ? (
+                          <><SquareTerminal size={16} /> Try Now</>
+                        ) : vmStatus === 'error' ? (
+                          <><div className="w-2 h-2 bg-red-500 rounded-full"></div> Engine Failed</>
+                        ) : (
+                          <>{formatStatus(vmStatus)}...</>
+                        )}
+                      </span>
+                    </button>
+
+                    {/* Embed Hover Override */}
+                    {isEmbed && vmStatus !== 'ready' && vmStatus !== 'error' && (
+                      <a 
+                        href={`/lab/${id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-4 border-on-surface flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-1 hover:-translate-x-1"
+                      >
+                        Open in SWACN <ExternalLink size={16} />
+                      </a>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Unified Containers with maintained dimensions for silent terminal fitting */}
+            <div className={`absolute inset-0 p-4 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex" />
+            </div>
+
+            <div className={`absolute inset-0 p-4 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <div ref={terminalRef} className="w-full h-full" />
+            </div>
+
+            {/* Keystroke HUD (Stacked Toast Overlay) */}
+            {!isSandboxMode && showKeystrokes && recordedKeys.length > 0 && (
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-lg pointer-events-none z-50 flex flex-col justify-end items-center gap-4">
+                {recordedKeys
+                  .filter(k => playerTime >= k.t && playerTime < k.t + 2.5)
+                  .slice(-3) // Only show last 3 active blocks to avoid clutter
+                  .map((k: any, i) => {
+                    const age = playerTime - k.t; 
+                    const opacity = age > 2.0 ? 1 - (age - 2.0) / 0.5 : 1;
+                    
+                    return (
+                      <div 
+                        key={`${k.t}-${k.k}`}
+                        className="transition-all duration-300 ease-linear"
+                        style={{ 
+                          opacity: Math.max(0, opacity),
+                          transform: `scale(${1 - (age * 0.05)})`,
+                        }}
+                      >
+                        <div className={`bg-primary text-white border-on-surface font-mono font-black hard-shadow flex items-center gap-4 justify-center ${isEmbed ? 'px-4 py-2 border-2 text-lg min-w-[3rem]' : 'px-8 py-4 border-4 text-2xl min-w-[4rem]'}`}>
+                          <span className="tracking-tighter">{k.k}</span>
+                          {k.count > 1 && <span className={`bg-white text-primary border-on-surface font-bold uppercase ${isEmbed ? 'text-xs px-1.5 py-0 border-2' : 'text-sm px-2 py-0.5 border-2'}`}>x{k.count}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+
+            {/* Context Menu */}
+            {contextMenu && (
+              <div 
+                className="fixed z-[1000] bg-background border-4 border-on-surface p-2 hard-shadow font-mono text-sm"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+              >
+                <button 
+                  onClick={copyEmbedCode}
+                  className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high'}`}
+                >
+                  {copiedEmbed ? <Check size={16} /> : <Share2 size={16} />} 
+                  {copiedEmbed ? 'Copied!' : 'Copy embed code'}
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Unified Containers with maintained dimensions for silent terminal fitting */}
-          <div className={`absolute inset-0 p-2 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-            <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex" />
-          </div>
-
-          <div className={`absolute inset-0 p-2 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <div ref={terminalRef} className="w-full h-full" />
-          </div>
-
-          {/* Keystroke HUD (Stacked Toast Overlay) */}
-          {!isSandboxMode && showKeystrokes && recordedKeys.length > 0 && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-lg pointer-events-none z-[999] flex flex-col justify-end items-center gap-4">
-              {recordedKeys
-                .filter(k => playerTime >= k.t && playerTime < k.t + 2.5)
-                .slice(-3) // Only show last 3 active blocks to avoid clutter
-                .map((k: any, i) => {
-                  const age = playerTime - k.t; 
-                  const opacity = age > 2.0 ? 1 - (age - 2.0) / 0.5 : 1;
-                  
-                  return (
-                    <div 
-                      key={`${k.t}-${k.k}`}
-                      className="transition-all duration-300 ease-linear"
-                      style={{ 
-                        opacity: Math.max(0, opacity),
-                        transform: `scale(${1 - (age * 0.05)})`,
-                      }}
-                    >
-                      <div className={`bg-primary text-white border-on-surface font-mono font-black hard-shadow flex items-center gap-4 justify-center ${isEmbed ? 'px-4 py-2 border-2 text-lg min-w-[3rem]' : 'px-8 py-4 border-4 text-2xl min-w-[4rem]'}`}>
-                        <span className="tracking-tighter">{k.k}</span>
-                        {k.count > 1 && <span className={`bg-white text-primary border-on-surface font-bold uppercase ${isEmbed ? 'text-xs px-1.5 py-0 border' : 'text-sm px-2 py-0.5 border-2'}`}>x{k.count}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-
-          {/* Context Menu */}
-          {contextMenu && (
-            <div 
-              className="fixed z-[1000] bg-background border-2 border-on-surface p-1 hard-shadow font-mono text-sm"
-              style={{ left: contextMenu.x, top: contextMenu.y }}
-            >
-              <button 
-                onClick={copyEmbedCode}
-                className={`w-full text-left px-4 py-2 transition-colors flex items-center gap-2 font-bold ${copiedEmbed ? 'bg-on-surface text-background' : 'text-primary hover:bg-primary hover:text-white'}`}
+          {/* Elegant Embed Footer */}
+          {isEmbed && (
+            <div className="h-12 bg-background border-t-4 border-on-surface flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest text-on-surface/70 relative z-10">
+              <div className="flex items-center gap-4">
+                 {isSandboxMode 
+                   ? <span className="flex items-center gap-2 text-primary"><SquareTerminal size={14}/> Live Interactive Sandbox</span> 
+                   : (isPlaying 
+                      ? <span className="flex items-center gap-2"><Play size={14}/> Playing Cast</span> 
+                      : <span className="flex items-center gap-2"><Pause size={14}/> Paused</span>
+                     )
+                 }
+              </div>
+              
+              <a 
+                href={`/lab/${id}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-primary transition-colors group"
               >
-                {copiedEmbed ? <Check size={14} /> : <Share2 size={14} />} 
-                {copiedEmbed ? 'Copied!' : 'Copy embed code'}
-              </button>
+                Open in SWACN 
+                <span className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
+                  <ExternalLink size={14} />
+                </span>
+              </a>
             </div>
           )}
-        </div>
 
-        {/* Elegant Embed Footer */}
-        {isEmbed && (
-          <div className="h-10 bg-background border-t-2 border-on-surface flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest text-on-surface/70">
-            <div className="flex items-center gap-4">
-               {isSandboxMode 
-                 ? <span className="flex items-center gap-1.5 text-primary"><SquareTerminal size={12}/> Live Interactive Sandbox</span> 
-                 : (isPlaying 
-                    ? <span className="flex items-center gap-1.5"><Play size={12}/> Playing Cast</span> 
-                    : <span className="flex items-center gap-1.5"><Pause size={12}/> Paused</span>
-                   )
-               }
-            </div>
-            
-            <a 
-              href={`/lab/${id}`} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-primary transition-colors group"
-            >
-              Open in SWACN 
-              <span className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
-                <ExternalLink size={12} />
-              </span>
-            </a>
-          </div>
-        )}
-
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

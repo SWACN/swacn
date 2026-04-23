@@ -15,7 +15,7 @@ CREATE TABLE casts (
     manifest_url TEXT NOT NULL,
     baseline_url TEXT,
     recording_url TEXT,
-    theme VARCHAR(255) DEFAULT 'mocha',
+    theme VARCHAR(255) DEFAULT 'swacn-dark',
     show_keystrokes BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

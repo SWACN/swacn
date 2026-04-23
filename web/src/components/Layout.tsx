@@ -36,36 +36,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`min-h-screen flex flex-col selection:bg-primary selection:text-white ${isEmbed ? 'h-screen overflow-hidden' : ''}`}>
+      
+      {/* Floating Command Pill */}
       {!isEmbed && (
-      <nav className="bg-background border-b-4 border-on-surface sticky top-0 z-50 flex justify-between items-center w-full px-6 py-4">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="text-2xl font-black text-on-surface tracking-tighter font-headline">
-            SWACN
-          </Link>
-          <div className="hidden md:flex gap-6">
-            <NavLink to="/dashboard" className={({ isActive }) => cn("text-on-surface font-medium hover:bg-surface-container-high px-2 py-1", isActive && "text-primary font-bold border-b-2 border-primary")}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/blueprint" className={({ isActive }) => cn("text-on-surface font-medium hover:bg-surface-container-high px-2 py-1", isActive && "text-primary font-bold border-b-2 border-primary")}>
-              Blueprint
-            </NavLink>
-            <NavLink to="/lab" className={({ isActive }) => cn("text-on-surface font-medium hover:bg-surface-container-high px-2 py-1", isActive && "text-primary font-bold border-b-2 border-primary")}>
-              Lab
-            </NavLink>
-          </div>
-        </div>
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full max-w-[95%] md:max-w-max flex justify-center">
+          <nav className="pointer-events-auto bg-surface-container-high border-4 border-on-surface flex items-center p-2 hard-shadow gap-2 md:gap-6 bg-opacity-95 backdrop-blur-sm">
+            <Link to="/" className="text-xl md:text-2xl font-black text-on-surface tracking-tighter font-headline px-2 md:px-4 hover:scale-105 transition-transform">
+              SWACN
+            </Link>
+            <div className="hidden md:flex gap-2">
+              <NavLink to="/dashboard" className={({ isActive }) => cn("text-on-surface font-mono text-sm uppercase font-bold hover:bg-white px-4 py-2 border-2 border-transparent transition-all", isActive && "bg-white border-on-surface hard-shadow -translate-y-1 -translate-x-1")}>
+                Dashboard
+              </NavLink>
+              <NavLink to="/guide" className={({ isActive }) => cn("text-on-surface font-mono text-sm uppercase font-bold hover:bg-white px-4 py-2 border-2 border-transparent transition-all", isActive && "bg-white border-on-surface hard-shadow -translate-y-1 -translate-x-1")}>
+                Guide
+              </NavLink>
+              <NavLink to="/lab" className={({ isActive }) => cn("text-on-surface font-mono text-sm uppercase font-bold hover:bg-white px-4 py-2 border-2 border-transparent transition-all", isActive && "bg-white border-on-surface hard-shadow -translate-y-1 -translate-x-1")}>
+                Lab
+              </NavLink>
+            </div>
 
-        {/* Dynamic Action Button */}
-        <button 
-          onClick={handleGetCLI}
-          className="bg-primary text-white border-2 border-on-surface px-4 py-2 font-bold hover:translate-x-[2px] hover:translate-y-[2px] transition-none active:translate-x-[4px] active:translate-y-[4px] hard-shadow"
-        >
-          {token ? 'CLI Access' : 'Get CLI'}
-        </button>
-      </nav>
+            {/* Dynamic Action Button */}
+            <button 
+              onClick={handleGetCLI}
+              className="bg-primary text-white border-2 border-on-surface px-4 md:px-6 py-2 font-mono text-sm uppercase font-bold hover:-translate-y-1 hover:-translate-x-1 transition-all active:translate-y-0 active:translate-x-0 hard-shadow whitespace-nowrap ml-auto md:ml-0"
+            >
+              {token ? 'CLI Access' : 'Get CLI'}
+            </button>
+          </nav>
+        </div>
       )}
 
-      <main className="flex-grow flex flex-col">{children}</main>
+      <main className={`flex-grow flex flex-col ${!isEmbed ? 'pt-24 md:pt-32' : ''}`}>{children}</main>
 
       {/* --- CLI ACCESS MODAL --- */}
       {showModal && !isEmbed && (
