@@ -159,7 +159,7 @@ export function Lab() {
 
     const player = AsciinemaPlayer.create(recordingUrl, playerContainerRef.current, {
       loop: true,
-      fit: 'none', 
+      fit: 'both', 
       terminalFontSize: '15px', 
       terminalFontFamily: '"IBM Plex Mono", monospace'
       // NO THEME OPTION PASSED. We rely 100% on the CSS variables injected below.
@@ -413,9 +413,17 @@ export function Lab() {
       
       <style>{`
         /* 1. AGGRESSIVE ASCIINEMA STRUCTURAL NUKE */
-        asciinema-player, .ap-wrapper, .ap-player, .ap-terminal {
+        asciinema-player, .ap-wrapper, .ap-player {
           width: 100% !important;
           height: 100% !important;
+          background: transparent !important;
+          background-color: transparent !important;
+          border: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+
+        .ap-terminal {
           background: transparent !important;
           background-color: transparent !important;
           border: none !important;
@@ -425,13 +433,13 @@ export function Lab() {
         }
 
         .ap-term {
-        border: none !important;
+          border: none !important;
         }
 
         .ap-wrapper {
           display: flex !important;
-          justify-content: flex-start !important;
-          align-items: flex-start !important;
+          justify-content: center !important;
+          align-items: center !important;
         }
 
         /* 2. DYNAMIC THEME INJECTION
@@ -680,7 +688,7 @@ export function Lab() {
 
             {/* Unified Containers with maintained dimensions for silent terminal fitting */}
             <div className={`absolute inset-0 p-4 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-              <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex" />
+              <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex items-center justify-center" />
             </div>
 
             <div className={`absolute inset-0 p-4 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
