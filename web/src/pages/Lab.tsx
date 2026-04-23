@@ -335,17 +335,25 @@ export function Lab() {
       // rely on the top-level project state for isSandboxMode/hasRecording.
     });
 
-    const handleResize = () => {
-      if (isSandboxMode) {
+    let resizeTimeout: ReturnType<typeof setTimeout>;
+    const resizeObserver = new ResizeObserver(() => {
+      try {
         fitAddon.fit();
-        vm.setTerminalSize(term.cols, term.rows);
+        
+        // Debounce the VM stty commands to prevent serial port flooding
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          vm.setTerminalSize(term.cols, term.rows);
+        }, 300);
+      } catch (err) {
+        // Ignore fit errors if container is 0x0
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
+    resizeObserver.observe(terminalRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       vm.dispose();
       term.dispose();
       xtermInstance.current = null;
