@@ -408,6 +408,66 @@ export function Lab() {
   const currentThemeConfig = TERMINAL_THEMES[theme] || TERMINAL_THEMES['swacn-dark'];
   const currentPalette = currentThemeConfig.palette.split(':');
   const isDarkTheme = theme !== 'latte' && theme !== 'swacn';
+
+  const renderActionButton = (isEmbedSizing: boolean) => {
+    if (isSandboxMode && hasRecording && !isDefaultSandbox) {
+      return (
+        <button 
+          onClick={handleReturnToPlayback} 
+          className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5`}
+        >
+          <XCircle size={isEmbedSizing ? 12 : 16} /> Exit Sandbox
+        </button>
+      );
+    }
+    
+    if (vmStatus !== 'ready' || (!isSandboxMode && hasRecording && !isDefaultSandbox)) {
+      return (
+        <div className={`group relative flex ${vmStatus !== 'ready' ? (isEmbedSizing ? 'min-w-[100px]' : 'min-w-[160px]') : ''}`}>
+          <button 
+            onClick={vmStatus === 'ready' ? handleTryNow : undefined}
+            disabled={vmStatus !== 'ready' && !isEmbed}
+            className={`relative overflow-hidden border-on-surface font-mono font-bold uppercase transition-all flex items-center justify-center gap-2 hard-shadow
+              ${isEmbedSizing ? 'border-2 px-3 py-1 text-[10px]' : 'border-4 px-6 py-2.5 text-xs'}
+              ${vmStatus === 'ready' 
+                ? 'bg-primary text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer' 
+                : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
+          >
+            {/* Progress Fill Layer */}
+            <div 
+              className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
+              style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.2 }}
+            />
+
+            <span className="relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap">
+              {vmStatus === 'ready' ? (
+                <><SquareTerminal size={isEmbedSizing ? 12 : 16} /> Try Now</>
+              ) : vmStatus === 'error' ? (
+                <><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div> Failed</>
+              ) : (
+                <>{formatStatus(vmStatus)}...</>
+              )}
+            </span>
+          </button>
+
+          {/* Embed Hover Override */}
+          {isEmbed && vmStatus !== 'ready' && vmStatus !== 'error' && (
+            <a 
+              href={`/lab/${id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-on-surface flex items-center justify-center gap-1.5 font-mono font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-0.5 hover:-translate-x-0.5 ${isEmbedSizing ? 'border-2 text-[10px]' : 'border-4 text-xs'}`}
+            >
+              Open in SWACN <ExternalLink size={isEmbedSizing ? 12 : 16} />
+            </a>
+          )}
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div className={`flex-grow flex flex-col md:flex-row relative ${isEmbed ? 'h-full border-b-0 bg-background overflow-hidden' : 'w-full px-4 md:px-8 lg:px-16 xl:px-24 pb-4 md:pb-8 h-[calc(100vh-6rem)] md:h-[calc(100vh-8rem)]'}`}>
       
@@ -601,12 +661,17 @@ export function Lab() {
                 : 'BASE SANDBOX'}
               </span>
             </div>
+            
+            {/* Main Header Action Button */}
+            <div className="flex items-center z-20">
+              {renderActionButton(false)}
+            </div>
           </div>
           )}
           
           {/* Embed macOS-style Title Bar */}
           {isEmbed && (
-            <div className="h-10 bg-surface-container-high border-b-4 border-on-surface flex items-center px-4 shrink-0 relative z-10">
+            <div className="h-14 bg-surface-container-high border-b-4 border-on-surface flex items-center justify-between px-4 shrink-0 relative z-10">
               <div className="flex gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-on-surface"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-on-surface"></div>
@@ -614,6 +679,11 @@ export function Lab() {
               </div>
               <div className="absolute left-1/2 -translate-x-1/2 font-mono text-xs font-bold tracking-widest uppercase text-on-surface">
                 {projectName || id?.split('-')[0]}
+              </div>
+              
+              {/* Embed Header Action Button */}
+              <div className="flex items-center z-20">
+                {renderActionButton(true)}
               </div>
             </div>
           )}
@@ -628,63 +698,6 @@ export function Lab() {
               color: currentThemeConfig.fg,
             } as React.CSSProperties}
           >
-            
-            <div className="absolute top-6 right-8 z-30">
-              {isSandboxMode && hasRecording && !isDefaultSandbox ? (
-                <button 
-                  onClick={handleReturnToPlayback} 
-                  className={`bg-transparent backdrop-blur-[2px] border-4 px-4 py-2 font-mono text-xs font-bold uppercase transition-all hard-shadow flex items-center gap-2 ${
-                    isDarkTheme 
-                      ? 'text-white border-white/30 hover:bg-white hover:text-black hover:-translate-y-1 hover:-translate-x-1' 
-                      : 'text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-1 hover:-translate-x-1'
-                  }`}
-                >
-                  <XCircle size={16} /> Exit Sandbox
-                </button>
-              ) : (
-                // Show loading button if not ready, or "Try Now" if a project is loaded but not yet interactive
-                (vmStatus !== 'ready' || (!isSandboxMode && hasRecording && !isDefaultSandbox)) && (
-                  <div className={`group relative flex ${vmStatus !== 'ready' ? 'min-w-[160px]' : ''}`}>
-                    <button 
-                      onClick={vmStatus === 'ready' ? handleTryNow : undefined}
-                      disabled={vmStatus !== 'ready' && !isEmbed}
-                      className={`relative overflow-hidden border-4 border-on-surface px-6 py-3 font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-3 hard-shadow
-                        ${vmStatus === 'ready' 
-                          ? 'bg-primary text-white hover:-translate-y-1 hover:-translate-x-1 cursor-pointer' 
-                          : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
-                    >
-                      {/* Progress Fill Layer */}
-                      <div 
-                        className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
-                        style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.2 }}
-                      />
-
-                      <span className="relative z-10 flex items-center justify-center gap-2 whitespace-nowrap">
-                        {vmStatus === 'ready' ? (
-                          <><SquareTerminal size={16} /> Try Now</>
-                        ) : vmStatus === 'error' ? (
-                          <><div className="w-2 h-2 bg-red-500 rounded-full"></div> Engine Failed</>
-                        ) : (
-                          <>{formatStatus(vmStatus)}...</>
-                        )}
-                      </span>
-                    </button>
-
-                    {/* Embed Hover Override */}
-                    {isEmbed && vmStatus !== 'ready' && vmStatus !== 'error' && (
-                      <a 
-                        href={`/lab/${id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-4 border-on-surface flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-1 hover:-translate-x-1"
-                      >
-                        Open in SWACN <ExternalLink size={16} />
-                      </a>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
 
             {/* Unified Containers with maintained dimensions for silent terminal fitting */}
             <div className={`absolute inset-0 p-4 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
