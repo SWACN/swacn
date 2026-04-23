@@ -14,6 +14,8 @@ set(SRC
     src/controllers/AuthController.cpp
     src/controllers/CastController.cpp
     src/controllers/ProxyController.cpp
+    src/controllers/OembedController.cpp
+    src/controllers/LabHtmlController.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SRC})

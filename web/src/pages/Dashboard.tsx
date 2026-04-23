@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Terminal, Clock, ExternalLink } from 'lucide-react';
+import { Terminal, Clock, Share2, Check } from 'lucide-react';
 import { fetchCasts, getAuthToken } from '../lib/api';
 import { Link } from 'react-router-dom';
 
 export function Dashboard() {
   const [casts, setCasts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -23,6 +24,15 @@ export function Dashboard() {
     return <div className="p-12 font-mono text-primary text-center">Syncing ledger...</div>;
   }
 
+  const handleShare = (e: React.MouseEvent, castId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/lab/${castId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(castId);
+    setTimeout(() => setCopiedId(null), 1000);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <header className="mb-12 border-l-8 border-on-surface pl-8">
@@ -37,9 +47,22 @@ export function Dashboard() {
               <div className="w-10 h-10 bg-primary text-on-primary flex items-center justify-center">
                 <Terminal size={20} />
               </div>
-              <span className="font-mono text-[10px] bg-surface-container-low px-2 py-1 border-2 border-on-surface">
-                {new Date(cast.created_at).toLocaleDateString()}
-              </span>
+              <div className="flex items-center gap-2 h-8">
+                {copiedId === cast.id ? (
+                  <div className="font-mono text-[10px] font-bold bg-primary text-white px-3 py-1.5 border-2 border-on-surface uppercase tracking-widest z-20">
+                    Copied!
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={(e) => handleShare(e, cast.id)} className="z-20 relative p-1.5 border-2 border-on-surface text-primary hover:bg-primary hover:text-white transition-colors" title="Copy Link">
+                      <Share2 size={14} />
+                    </button>
+                    <span className="font-mono text-[10px] bg-surface-container-low px-2 py-1.5 border-2 border-on-surface">
+                      {new Date(cast.created_at).toLocaleDateString()}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
             
             <h3 className="font-mono font-bold text-lg mb-2 truncate">{cast.name || cast.id.split('-')[0]}</h3>

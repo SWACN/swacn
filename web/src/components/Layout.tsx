@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { getAuthToken } from '../lib/api'; // Import our token helper
 import { Copy, Check, Terminal, X } from 'lucide-react';
@@ -8,6 +8,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [searchParams] = useSearchParams();
+  const isEmbed = searchParams.get('embed') === 'true';
 
   // Sync token state on mount
   useEffect(() => {
@@ -33,7 +35,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const loginCmd = `swacn auth login ${token}`;
 
   return (
-    <div className="min-h-screen flex flex-col selection:bg-primary selection:text-white">
+    <div className={`min-h-screen flex flex-col selection:bg-primary selection:text-white ${isEmbed ? 'h-screen overflow-hidden' : ''}`}>
+      {!isEmbed && (
       <nav className="bg-background border-b-4 border-on-surface sticky top-0 z-50 flex justify-between items-center w-full px-6 py-4">
         <div className="flex items-center gap-8">
           <Link to="/" className="text-2xl font-black text-on-surface tracking-tighter font-headline">
@@ -60,11 +63,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {token ? 'CLI Access' : 'Get CLI'}
         </button>
       </nav>
+      )}
 
-      <main className="flex-grow">{children}</main>
+      <main className="flex-grow flex flex-col">{children}</main>
 
       {/* --- CLI ACCESS MODAL --- */}
-      {showModal && (
+      {showModal && !isEmbed && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/40 backdrop-blur-sm">
           <div className="bg-background border-4 border-on-surface w-full max-w-2xl hard-shadow overflow-hidden">
             <div className="bg-on-surface p-4 flex justify-between items-center">
@@ -114,7 +118,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Footer stays same */}
+      {/* Footer */}
+      {!isEmbed && (
       <footer className="bg-background border-t-4 border-on-surface flex flex-col md:flex-row justify-between items-center px-6 py-8 w-full font-mono text-xs uppercase tracking-widest">
         <div className="mb-4 md:mb-0 text-on-surface">(c) 2026 SWACN</div>
         <div className="flex gap-8">
@@ -122,6 +127,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <a className="text-on-surface hover:text-primary" href="#">Discord</a>
         </div>
       </footer>
+      )}
     </div>
   );
 }

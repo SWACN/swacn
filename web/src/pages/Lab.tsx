@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
@@ -36,6 +36,8 @@ const getXtermTheme = (themeName: Theme) => {
 export function Lab() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isEmbed = searchParams.get('embed') === 'true';
   
   const [activeTab, setActiveTab] = useState<Tab>('projects');
   const [theme, setTheme] = useState<Theme>('mocha');
@@ -43,6 +45,14 @@ export function Lab() {
   const [projectName, setProjectName] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
   
   const [isPlaying, setIsPlaying] = useState(true);
   const [isSandboxMode, setIsSandboxMode] = useState(false);
@@ -118,6 +128,23 @@ export function Lab() {
     if (id && isOwner) {
       updateCastSettings(id, { theme, show_keystrokes: show }).catch(console.error);
     }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!id) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+    setCopiedEmbed(false);
+  };
+
+  const copyEmbedCode = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!id) return;
+    const url = `${window.location.origin}/lab/${id}?embed=true`;
+    const embedCode = `<iframe src="${url}" width="800" height="600" style="border: none; display: block;" frameborder="0" allowfullscreen></iframe>`;
+    navigator.clipboard.writeText(embedCode);
+    setCopiedEmbed(true);
+    setTimeout(() => setContextMenu(null), 1000);
   };
 
   // --- ASCIINEMA INITIALIZATION (Crash-Proof) ---
@@ -373,7 +400,7 @@ export function Lab() {
   const isDarkTheme = theme !== 'latte';
 
   return (
-    <div className="flex-grow flex flex-col md:flex-row border-b-4 border-on-surface h-[calc(100vh-160px)] relative overflow-hidden">
+    <div className={`flex-grow flex flex-col md:flex-row border-on-surface relative overflow-hidden ${isEmbed ? 'h-full border-b-0 bg-background' : 'h-[calc(100vh-160px)] border-b-4'}`}>
       
       <style>{`
         /* 1. AGGRESSIVE ASCIINEMA STRUCTURAL NUKE */
@@ -439,11 +466,14 @@ export function Lab() {
       `}</style>
 
       {/* Mobile Backdrop */}
-      <div 
-        className={`md:hidden absolute inset-0 bg-black/50 z-30 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setIsSidebarOpen(false)}
-      />
+      {!isEmbed && (
+        <div 
+          className={`md:hidden absolute inset-0 bg-black/50 z-30 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
+      {!isEmbed && (
       <aside className={`absolute md:relative z-40 h-full bg-background border-on-surface flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${isSidebarOpen ? 'w-4/5 md:w-80 border-r-4 translate-x-0' : 'w-0 border-r-0 -translate-x-full md:translate-x-0'}`}>
         <div className="w-[80vw] md:w-80 h-full flex flex-col flex-shrink-0">
 
@@ -514,9 +544,11 @@ export function Lab() {
          </div>
         </div>
       </aside>
+      )}
 
       <section className="flex-grow flex flex-col relative overflow-hidden">
         
+        {!isEmbed && (
         <div className="p-3 border-b-4 border-on-surface bg-background flex justify-between items-center z-10 h-14">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
@@ -549,11 +581,27 @@ export function Lab() {
             </span>
           </div>
         </div>
+        )}
         
+        {/* Embed macOS-style Title Bar */}
+        {isEmbed && (
+          <div className="h-8 bg-surface-container-high border-b-2 border-on-surface flex items-center px-4 shrink-0">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 border border-on-surface"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-on-surface"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 border border-on-surface"></div>
+            </div>
+            <div className="absolute left-1/2 -translate-x-1/2 font-mono text-[10px] font-bold tracking-widest uppercase text-on-surface/50">
+              {projectName || id?.split('-')[0]}
+            </div>
+          </div>
+        )}
+
         {/* Core Viewport Background */}
         <div 
           key={id || 'base'}
           className="flex-grow w-full relative" 
+          onContextMenu={handleContextMenu}
           style={{ 
             backgroundColor: currentCatTheme.bg,
             color: currentCatTheme.fg,
@@ -575,28 +623,44 @@ export function Lab() {
             ) : (
               // Show loading button if not ready, or "Try Now" if a project is loaded but not yet interactive
               (vmStatus !== 'ready' || (!isSandboxMode && hasRecording && !isDefaultSandbox)) && (
-                <button 
-                  onClick={handleTryNow}
-                  disabled={vmStatus !== 'ready'}
-                  className={`relative overflow-hidden border-2 border-on-surface px-4 py-2 font-mono text-xs font-bold uppercase transition-all flex items-center gap-2 hard-shadow
-                    ${vmStatus === 'ready' ? 'bg-primary text-white hover:translate-y-[2px] hover:translate-x-[2px] cursor-pointer' : 'bg-surface-container-high text-on-surface/60 cursor-not-allowed'}`}
-                >
-                  {/* Progress Fill Layer */}
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
-                    style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.4 }}
-                  />
+                <div className={`group relative flex ${vmStatus !== 'ready' ? 'min-w-[160px]' : ''}`}>
+                  <button 
+                    onClick={vmStatus === 'ready' ? handleTryNow : undefined}
+                    disabled={vmStatus !== 'ready' && !isEmbed}
+                    className={`relative overflow-hidden border-2 border-on-surface px-4 py-2 font-mono text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 hard-shadow
+                      ${vmStatus === 'ready' 
+                        ? 'bg-primary text-white hover:translate-y-[2px] hover:translate-x-[2px] cursor-pointer' 
+                        : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
+                  >
+                    {/* Progress Fill Layer */}
+                    <div 
+                      className="absolute inset-y-0 left-0 bg-primary transition-all duration-700 ease-out z-0"
+                      style={{ width: `${getVMProgress(vmStatus)}%`, opacity: vmStatus === 'ready' ? 1 : 0.4 }}
+                    />
 
-                  <span className="relative z-10 flex items-center gap-2">
-                    {vmStatus === 'ready' ? (
-                      <><SquareTerminal size={14} /> Try Now</>
-                    ) : vmStatus === 'error' ? (
-                      <><div className="w-2 h-2 bg-red-500 rounded-full"></div> Engine Failed</>
-                    ) : (
-                      <>{formatStatus(vmStatus)}...</>
-                    )}
-                  </span>
-                </button>
+                    <span className="relative z-10 flex items-center justify-center gap-2 whitespace-nowrap">
+                      {vmStatus === 'ready' ? (
+                        <><SquareTerminal size={14} /> Try Now</>
+                      ) : vmStatus === 'error' ? (
+                        <><div className="w-2 h-2 bg-red-500 rounded-full"></div> Engine Failed</>
+                      ) : (
+                        <>{formatStatus(vmStatus)}...</>
+                      )}
+                    </span>
+                  </button>
+
+                  {/* Embed Hover Override */}
+                  {isEmbed && vmStatus !== 'ready' && vmStatus !== 'error' && (
+                    <a 
+                      href={`/lab/${id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-2 border-on-surface flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase transition-opacity duration-300 hard-shadow z-20 whitespace-nowrap"
+                    >
+                      Open in SWACN <ExternalLink size={14} />
+                    </a>
+                  )}
+                </div>
               )
             )}
           </div>
@@ -623,22 +687,66 @@ export function Lab() {
                   return (
                     <div 
                       key={`${k.t}-${k.k}`}
-                      className="transition-all duration-500 ease-out"
+                      className="transition-all duration-300 ease-linear"
                       style={{ 
                         opacity: Math.max(0, opacity),
                         transform: `scale(${1 - (age * 0.05)})`,
                       }}
                     >
-                      <div className="bg-primary text-white border-4 border-on-surface px-8 py-4 font-mono text-2xl font-black hard-shadow flex items-center gap-4 min-w-[4rem] justify-center">
+                      <div className={`bg-primary text-white border-on-surface font-mono font-black hard-shadow flex items-center gap-4 justify-center ${isEmbed ? 'px-4 py-2 border-2 text-lg min-w-[3rem]' : 'px-8 py-4 border-4 text-2xl min-w-[4rem]'}`}>
                         <span className="tracking-tighter">{k.k}</span>
-                        {k.count > 1 && <span className="bg-white text-primary text-sm px-2 py-0.5 border-2 border-on-surface font-bold uppercase">x{k.count}</span>}
+                        {k.count > 1 && <span className={`bg-white text-primary border-on-surface font-bold uppercase ${isEmbed ? 'text-xs px-1.5 py-0 border' : 'text-sm px-2 py-0.5 border-2'}`}>x{k.count}</span>}
                       </div>
                     </div>
                   );
                 })}
             </div>
           )}
+
+          {/* Context Menu */}
+          {contextMenu && (
+            <div 
+              className="fixed z-[1000] bg-background border-2 border-on-surface p-1 hard-shadow font-mono text-sm"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              <button 
+                onClick={copyEmbedCode}
+                className={`w-full text-left px-4 py-2 transition-colors flex items-center gap-2 font-bold ${copiedEmbed ? 'bg-on-surface text-background' : 'text-primary hover:bg-primary hover:text-white'}`}
+              >
+                {copiedEmbed ? <Check size={14} /> : <Share2 size={14} />} 
+                {copiedEmbed ? 'Copied!' : 'Copy embed code'}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Elegant Embed Footer */}
+        {isEmbed && (
+          <div className="h-10 bg-background border-t-2 border-on-surface flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest text-on-surface/70">
+            <div className="flex items-center gap-4">
+               {isSandboxMode 
+                 ? <span className="flex items-center gap-1.5 text-primary"><SquareTerminal size={12}/> Live Interactive Sandbox</span> 
+                 : (isPlaying 
+                    ? <span className="flex items-center gap-1.5"><Play size={12}/> Playing Cast</span> 
+                    : <span className="flex items-center gap-1.5"><Pause size={12}/> Paused</span>
+                   )
+               }
+            </div>
+            
+            <a 
+              href={`/lab/${id}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-primary transition-colors group"
+            >
+              Open in SWACN 
+              <span className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
+                <ExternalLink size={12} />
+              </span>
+            </a>
+          </div>
+        )}
+
       </section>
     </div>
   );

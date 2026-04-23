@@ -1,0 +1,77 @@
+#include "OembedController.hpp"
+#include <regex>
+
+void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    std::string url = req->getParameter("url");
+    if (url.empty()) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k400BadRequest);
+        resp->setBody("Missing url parameter");
+        callback(resp);
+        return;
+    }
+
+    // Extract UUID from url
+    std::smatch match;
+    std::regex uuid_regex("/lab/([a-fA-F0-9\\-]+)");
+    if (!std::regex_search(url, match, uuid_regex) || match.size() < 2) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k400BadRequest);
+        resp->setBody("Invalid url format for oembed");
+        callback(resp);
+        return;
+    }
+
+    std::string uuid = match[1].str();
+
+    auto dbClient = drogon::app().getDbClient();
+    std::string like_pattern = uuid + "/%";
+    
+    dbClient->execSqlAsync(
+        "SELECT project_name FROM casts WHERE manifest_url LIKE $1",
+        [callback, url, uuid](const drogon::orm::Result& r) {
+            if (r.empty()) {
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k404NotFound);
+                resp->setBody("Cast not found");
+                callback(resp);
+                return;
+            }
+            
+            std::string project_name = r[0]["project_name"].isNull() ? "Terminal Session" : r[0]["project_name"].as<std::string>();
+            if (project_name.empty()) project_name = "Terminal Session";
+
+            std::string iframe_url = url;
+            if (iframe_url.find("?") != std::string::npos) {
+                iframe_url += "&embed=true";
+            } else {
+                iframe_url += "?embed=true";
+            }
+
+            Json::Value oembed;
+            oembed["version"] = "1.0";
+            oembed["type"] = "rich";
+            oembed["title"] = project_name;
+            oembed["provider_name"] = "SWACN";
+            
+            const char* env_url = getenv("APP_URL");
+            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+            oembed["provider_url"] = base_url;
+            
+            oembed["width"] = 800;
+            oembed["height"] = 600;
+            
+            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"600\" style=\"border: none; display: block;\" frameborder=\"0\" allowfullscreen></iframe>";
+            oembed["html"] = html;
+            
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);
+            callback(resp);
+        },
+        [callback](const drogon::orm::DrogonDbException& e) {
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setStatusCode(drogon::k500InternalServerError);
+            callback(resp);
+        },
+        like_pattern
+    );
+}
