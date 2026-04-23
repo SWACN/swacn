@@ -271,11 +271,17 @@ export class V86VM {
     const c = cols ?? this.xterm.cols;
     const r = rows ?? this.xterm.rows;
     // Update the VM's shell about the new terminal size
-    // Silence the command as much as possible by wrapping it in stty -echo
+    // Note: Sending stty commands over the raw serial port while the user is interacting
+    // will pollute their prompt and break any command they are currently typing.
+    // Since raw serial doesn't support out-of-band SIGWINCH signals like a true PTY,
+    // we must rely on xterm.js for visual wrapping during dynamic resizes.
+    
+    /*
     const cmd = ` stty -echo; stty cols ${c} rows ${r}; stty echo\n`;
     for (let i = 0; i < cmd.length; i++) {
       this.emulator.serial0_send(cmd[i]);
     }
+    */
   }
 
   public dispose() {
