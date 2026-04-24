@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, Download, Copy, Check, ChevronRight, Command, Package, Zap } from 'lucide-react';
+import { Terminal, Download, Copy, Check, ChevronRight, Command, Package, Zap, X } from 'lucide-react';
+import { getAuthToken } from '../lib/api';
 
 export function CLI() {
   const [copied, setCopied] = useState(false);
+  const [modalCopied, setModalCopied] = useState(false);
   const [installPlatform, setInstallPlatform] = useState<'unix' | 'windows'>('unix');
+  const [token, setToken] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     // Basic OS detection
@@ -11,6 +15,9 @@ export function CLI() {
     if (ua.includes('win')) {
       setInstallPlatform('windows');
     }
+    
+    // Sync token state
+    setToken(getAuthToken());
   }, []);
 
   const installCmdUnix = "curl -fsSL https://raw.githubusercontent.com/karthikeyjoshi/swacn/main/scripts/install.sh | bash";
@@ -23,6 +30,22 @@ export function CLI() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleModalCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setModalCopied(true);
+    setTimeout(() => setModalCopied(false), 2000);
+  };
+
+  const handleGetCLI = () => {
+    if (!token) {
+      window.location.href = '/api/auth/github/login';
+    } else {
+      setShowModal(true);
+    }
+  };
+
+  const loginCmd = `swacn auth login ${token}`;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-24">
@@ -37,16 +60,19 @@ export function CLI() {
             The Command<br/>Line Interface.
           </h1>
           <p className="text-xl leading-relaxed mb-12 text-on-surface/80 max-w-xl">
-            A high-performance binary written in C++ for real-time filesystem event sourcing. Zero dependencies, statically linked, and ready for your production pipeline.
+            A lightweight, cross-platform C++ CLI for capturing your terminal sessions and workspace filesystem. Built for developers to seamlessly share interactive coding environments.
           </p>
           <div className="flex flex-wrap gap-4">
-            <a href="https://github.com/karthikeyjoshi/swacn/releases/latest" target="_blank" rel="noopener noreferrer" className="bg-primary text-on-primary border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none hard-shadow flex items-center gap-4">
+            <button 
+              onClick={handleGetCLI}
+              className="bg-black text-white border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none hard-shadow flex items-center gap-4 w-full md:w-auto justify-center"
+            >
+              <Terminal size={24} />
+              {token ? 'View API Key' : 'Authenticate CLI'}
+            </button>
+            <a href="https://github.com/karthikeyjoshi/swacn/releases/latest" target="_blank" rel="noopener noreferrer" className="bg-primary text-on-primary border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none hard-shadow flex items-center gap-4 flex-1 md:flex-none justify-center">
               <Download size={24} />
               Releases
-            </a>
-            <a href="https://github.com/karthikeyjoshi/swacn" target="_blank" rel="noopener noreferrer" className="bg-white text-on-surface border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none flex items-center gap-4">
-              <Package size={24} />
-              View on GitHub
             </a>
           </div>
         </div>
@@ -113,22 +139,22 @@ export function CLI() {
             <div className="w-12 h-12 bg-primary text-on-primary flex items-center justify-center mb-6">
               <Command size={24} />
             </div>
-            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Native Binary</h3>
-            <p className="text-sm leading-relaxed opacity-70">Compiled with Clang 15 for maximum performance. No Node.js or Python runtime required. Just download and run.</p>
+            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Cross-Platform</h3>
+            <p className="text-sm leading-relaxed opacity-70">Available natively for Windows, macOS (Apple Silicon), and Linux. A fast C++ executable that integrates seamlessly into your terminal.</p>
           </div>
           <div className="border-4 border-on-surface p-8 bg-surface-container-high">
             <div className="w-12 h-12 bg-on-surface text-background flex items-center justify-center mb-6">
-              <Zap size={24} />
+              <Package size={24} />
             </div>
-            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Real-time Sync</h3>
-            <p className="text-sm leading-relaxed opacity-70">Sub-millisecond latency for filesystem event detection. Your changes are indexed and ready before you can switch tabs.</p>
+            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Filesystem Snapshots</h3>
+            <p className="text-sm leading-relaxed opacity-70">Capture the complete state of your workspace. SWACN automatically bundles your codebase so viewers can interact with your actual files.</p>
           </div>
           <div className="border-4 border-on-surface p-8 bg-white">
             <div className="w-12 h-12 bg-primary text-on-primary flex items-center justify-center mb-6">
               <Terminal size={24} />
             </div>
-            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Rich Output</h3>
-            <p className="text-sm leading-relaxed opacity-70">Beautifully formatted terminal UI with progress indicators, detailed error reporting, and JSON output for automation.</p>
+            <h3 className="font-headline text-2xl font-black uppercase mb-4 tracking-tighter">Asciinema Powered</h3>
+            <p className="text-sm leading-relaxed opacity-70">SWACN acts as a powerful wrapper around the standard Asciinema CLI, enabling high-fidelity keystroke and output recording.</p>
           </div>
         </div>
       </section>
@@ -141,12 +167,12 @@ export function CLI() {
         </div>
         <div className="space-y-4 font-mono">
           {[
-            { cmd: "swacn init", desc: "Initialize a new SWACN workspace in the current directory." },
-            { cmd: "swacn sync", desc: "Start the real-time filesystem watcher and sync to the cloud." },
-            { cmd: "swacn status", desc: "Check the health of the local daemon and remote connection." },
-            { cmd: "swacn log", desc: "View the global transaction log for the current workspace." },
-            { cmd: "swacn rollback [id]", desc: "Revert the workspace state to a specific transaction ID." },
-            { cmd: "swacn manifest", desc: "Generate a JSON manifest of the current system state." },
+            { cmd: "swacn auth login <K>", desc: "Verify and securely save your API key." },
+            { cmd: "swacn record", desc: "Start an interactive terminal recording." },
+            { cmd: "swacn record --fs", desc: "Start recording AND capture the local filesystem state." },
+            { cmd: "swacn record --keys", desc: "Start recording AND capture raw keystrokes." },
+            { cmd: "swacn record --overwrite", desc: "Overwrite any existing recording in the .swacn directory." },
+            { cmd: "swacn upload", desc: "Upload the finished recording to the SWACN cloud." },
           ].map((item, idx) => (
             <div key={idx} className="border-2 border-on-surface p-6 flex flex-col md:flex-row md:items-center justify-between hover:bg-surface-container-high transition-colors group">
               <div className="flex items-center gap-4 mb-2 md:mb-0">
@@ -159,24 +185,58 @@ export function CLI() {
         </div>
       </section>
 
-      {/* OS Support */}
-      <section className="border-4 border-on-surface p-12 bg-surface-container-low text-center">
-        <h2 className="font-headline text-3xl font-black uppercase mb-8 tracking-tighter">Supported Architectures</h2>
-        <div className="flex flex-wrap justify-center gap-12">
-          <div className="flex flex-col items-center">
-            <span className="font-bold text-4xl mb-2"></span>
-            <span className="font-mono text-xs uppercase tracking-widest opacity-50">macOS (Apple Silicon)</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="font-bold text-4xl mb-2">🐧</span>
-            <span className="font-mono text-xs uppercase tracking-widest opacity-50">Linux (x86_64/ARM64)</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="font-bold text-4xl mb-2">🪟</span>
-            <span className="font-mono text-xs uppercase tracking-widest opacity-50">Windows (Native x86_64)</span>
+
+
+      {/* --- CLI ACCESS MODAL --- */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/40 backdrop-blur-sm">
+          <div className="bg-background border-4 border-on-surface w-full max-w-2xl hard-shadow overflow-hidden">
+            <div className="bg-on-surface p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-background font-mono text-sm font-bold">
+                <Terminal size={18} />
+                <span>SWACN_AUTH_PROMPT</span>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-background hover:text-primary">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-8">
+              <h2 className="font-headline text-3xl font-black uppercase mb-4">You're Authenticated.</h2>
+              <p className="font-mono text-sm mb-8 opacity-70">Use the following key to authorize your local machine with the SWACN kernel.</p>
+
+              <div className="space-y-6">
+                {/* API Key Box */}
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Your Secret API Key</label>
+                  <div className="flex items-center justify-between bg-surface-container-high border-2 border-on-surface p-4 font-mono text-sm">
+                    <span className="truncate mr-4">{token}</span>
+                    <button onClick={() => handleModalCopy(token || '')} className="text-primary hover:scale-110 transition-transform">
+                      {modalCopied ? <Check size={18} /> : <Copy size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Command Box */}
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Run this in your terminal</label>
+                  <div className="bg-on-surface text-background p-4 font-mono text-sm flex justify-between items-center border-2 border-on-surface">
+                    <code>{loginCmd}</code>
+                    <button onClick={() => handleModalCopy(loginCmd)} className="text-primary">
+                      <Copy size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t-2 border-on-surface/10 flex justify-between items-center font-mono text-[10px] opacity-50 uppercase tracking-widest">
+                  <span>Target: {window.location.hostname}</span>
+                  <span>Protocol: v1.0.4-secure</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }
