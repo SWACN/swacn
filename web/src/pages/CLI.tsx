@@ -48,7 +48,7 @@ export function CLI() {
   const loginCmd = `swacn auth login ${token}`;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-24">
+    <div className="max-w-7xl mx-auto px-6 pt-8 md:pt-16 pb-12 md:pb-24">
       {/* Hero Header */}
       <section className="mb-32 flex flex-col md:flex-row items-center gap-16">
         <div className="md:w-1/2">

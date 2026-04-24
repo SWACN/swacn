@@ -35,3 +35,12 @@
 .hard-shadow-sm {
   box-shadow: 2px 2px 0px 0px var(--color-on-surface);
 }
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -449,7 +449,7 @@ export function Lab() {
       return (
         <button 
           onClick={handleReturnToPlayback} 
-          className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5`}
+          className={`bg-transparent border-2 ${isEmbedSizing ? 'px-4 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5`}
         >
           <XCircle size={isEmbedSizing ? 12 : 16} /> Exit Sandbox
         </button>
@@ -463,7 +463,7 @@ export function Lab() {
             onClick={vmStatus === 'ready' ? handleTryNow : undefined}
             disabled={vmStatus !== 'ready' && !isEmbed}
             className={`relative overflow-hidden border-on-surface font-mono font-bold uppercase transition-all flex items-center justify-center gap-2 hard-shadow
-              ${isEmbedSizing ? 'border-2 px-3 py-1 text-[10px]' : 'border-4 px-6 py-2.5 text-xs'}
+              ${isEmbedSizing ? 'border-2 px-4 py-1.5 text-[10px]' : 'border-2 px-6 py-2.5 text-xs'}
               ${vmStatus === 'ready' 
                 ? 'bg-primary text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer' 
                 : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
@@ -491,7 +491,7 @@ export function Lab() {
               href={`/lab/${id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className={`absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-on-surface flex items-center justify-center gap-1.5 font-mono font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-0.5 hover:-translate-x-0.5 ${isEmbedSizing ? 'border-2 text-[10px]' : 'border-4 text-xs'}`}
+              className={`absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-on-surface flex items-center justify-center gap-1.5 font-mono font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-0.5 hover:-translate-x-0.5 ${isEmbedSizing ? 'border-2 text-[10px]' : 'border-2 text-xs'}`}
             >
               Open in SWACN <ExternalLink size={isEmbedSizing ? 12 : 16} />
             </a>
@@ -712,7 +712,7 @@ export function Lab() {
             </div>
             
             {/* Main Header Action Button */}
-            <div className="flex items-center gap-2 z-20">
+            <div className="flex items-center gap-3 z-20">
               {renderDownloadButton(false)}
               {renderActionButton(false)}
             </div>
@@ -732,7 +732,7 @@ export function Lab() {
               </div>
               
               {/* Embed Header Action Button */}
-              <div className="flex items-center gap-2 z-20">
+              <div className="flex items-center gap-3 z-20">
                 {renderDownloadButton(true)}
                 {renderActionButton(true)}
               </div>

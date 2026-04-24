@@ -213,14 +213,16 @@ export function Guide() {
                 Show off your creation. Share the URL directly or embed your SWACN terminal sessions into your blog, documentation, or portfolio.
               </p>
               
-              <div className="bg-background border-2 border-on-surface p-4 font-mono text-sm overflow-x-auto max-w-3xl">
-<pre className="text-on-surface/80">
-<span className="text-primary font-bold">&lt;iframe </span>
-  <span className="text-on-surface">src=</span><span className="text-primary/80">"https://swacn.app/lab/proj-123?embed=true"</span>
-  <span className="text-on-surface">style=</span><span className="text-primary/80">"width: 100%; height: 600px; border: none;"</span>
-  <span className="text-on-surface">allow=</span><span className="text-primary/80">"clipboard-write"</span>
-<span className="text-primary font-bold">&gt;&lt;/iframe&gt;</span>
-</pre>
+              <div className="bg-primary/5 border-l-4 border-primary p-6 mt-6 max-w-2xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="bg-primary p-2 text-white hard-shadow-sm">
+                    <LinkIcon size={20} />
+                  </div>
+                  <h4 className="font-headline font-black text-xl uppercase tracking-tight text-on-surface">Pro Tip: Quick Embed</h4>
+                </div>
+                <p className="font-mono text-sm leading-relaxed text-on-surface/80">
+                  Instead of writing code manually, you can directly right-click anywhere inside the terminal while viewing your workspace to instantly copy the iframe embed code to your clipboard.
+                </p>
               </div>
             </div>
           </div>
