@@ -615,7 +615,13 @@ export function Lab() {
                 <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2">Workspaces</h2>
                 
                 <div 
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-project-creator'))}
+                  onClick={() => {
+                    if (getAuthToken()) {
+                      window.dispatchEvent(new CustomEvent('open-project-creator'));
+                    } else {
+                      window.location.href = '/api/auth/github/login';
+                    }
+                  }}
                   className="p-4 border-2 border-dashed border-on-surface cursor-pointer font-mono text-sm flex items-center justify-center gap-3 transition-colors bg-surface-container-high hover:bg-white text-on-surface/60 hover:text-on-surface mb-4 group"
                 >
                   <span className="font-bold uppercase tracking-widest group-hover:scale-105 transition-transform">+ Make New Project</span>

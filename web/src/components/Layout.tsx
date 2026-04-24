@@ -51,7 +51,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {/* Dynamic Action Buttons */}
             <div className="flex gap-2 ml-auto md:ml-0">
               <button 
-                onClick={() => setIsCreateModalOpen(true)}
+                onClick={() => {
+                  if (token) {
+                    setIsCreateModalOpen(true);
+                  } else {
+                    window.location.href = '/api/auth/github/login';
+                  }
+                }}
                 className={cn(
                   "border-2 border-on-surface px-4 md:px-6 py-2 font-mono text-sm uppercase font-bold transition-all hard-shadow whitespace-nowrap",
                   "bg-primary text-white hover:-translate-y-1 hover:-translate-x-1"
