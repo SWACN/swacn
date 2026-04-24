@@ -165,7 +165,7 @@ export function CLI() {
         <div className="flex flex-wrap justify-center gap-12">
           <div className="flex flex-col items-center">
             <span className="font-bold text-4xl mb-2"></span>
-            <span className="font-mono text-xs uppercase tracking-widest opacity-50">macOS (Intel/M1/M2)</span>
+            <span className="font-mono text-xs uppercase tracking-widest opacity-50">macOS (Apple Silicon)</span>
           </div>
           <div className="flex flex-col items-center">
             <span className="font-bold text-4xl mb-2">🐧</span>

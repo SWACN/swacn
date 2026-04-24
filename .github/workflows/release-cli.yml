@@ -24,9 +24,6 @@ jobs:
           - os: macos-latest
             artifact_name: swacn
             asset_name: swacn-macos-arm64
-          - os: macos-26-large
-            artifact_name: swacn
-            asset_name: swacn-macos-x86_64
           - os: windows-latest
             artifact_name: swacn.exe
             asset_name: swacn-windows-x86_64.exe
