@@ -78,7 +78,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="mb-4 md:mb-0 text-on-surface">(c) 2026 SWACN</div>
         <div className="flex gap-8 items-center">
           <Link to="/cli" className="text-on-surface hover:text-primary">CLI Access</Link>
-          <a className="text-on-surface hover:text-primary" href="#">GitHub</a>
+          <Link to="/terms" className="text-on-surface hover:text-primary">Terms</Link>
           <a className="text-on-surface hover:text-primary" href="#">Discord</a>
           {token && (
             <button 

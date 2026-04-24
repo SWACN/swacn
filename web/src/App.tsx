@@ -16,6 +16,7 @@ import { Guide } from './pages/Guide';
 import { CLI } from './pages/CLI';
 import { AuthCallback } from './pages/AuthCallback';
 import { Dashboard } from './pages/Dashboard';
+import { Terms } from './pages/Terms';
 
 export default function App() {
   return (
@@ -29,7 +30,9 @@ export default function App() {
           <Route path="/lab" element={<Lab />} /> {/* Fallback for testing */}
           <Route path="/guide" element={<Guide />} />
           <Route path="/cli" element={<CLI />} />
+          <Route path="/terms" element={<Terms />} />
           {/* Fallback route */}
+
           <Route path="*" element={<Home />} />
         </Routes>
       </Layout>
