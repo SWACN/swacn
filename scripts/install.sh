@@ -57,13 +57,28 @@ echo "Successfully installed swacn to $DEST"
 
 # Check if PATH contains ~/.local/bin
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo "Adding $INSTALL_DIR to your PATH..."
+    
+    # Update bashrc
+    if [ -f "$HOME/.bashrc" ]; then
+        if ! grep -q "$INSTALL_DIR" "$HOME/.bashrc"; then
+            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.bashrc"
+        fi
+    fi
+
+    # Update zshrc
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "$INSTALL_DIR" "$HOME/.zshrc"; then
+            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.zshrc"
+        fi
+    fi
+
     echo "==============================================="
-    echo " ACTION REQUIRED: Add $INSTALL_DIR to your PATH"
+    echo " ACTION REQUIRED: Restart your terminal"
     echo "==============================================="
-    echo "Depending on your shell, run one of the following:"
-    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
-    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
-    echo "Then restart your terminal or run 'source ~/.zshrc'."
+    echo "Your shell configuration has been automatically updated."
+    echo "Please open a NEW terminal window or run:"
+    echo "  source ~/.bashrc  # (or ~/.zshrc)"
 else
     echo "Installation complete! Try running 'swacn' in your terminal."
 fi
