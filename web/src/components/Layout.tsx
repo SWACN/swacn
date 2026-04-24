@@ -3,15 +3,21 @@ import { NavLink, Link, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { getAuthToken, logout } from '../lib/api';
 import { Copy, Check, Terminal, X, LogOut } from 'lucide-react';
+import { ProjectCreatorModal } from './ProjectCreatorModal';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const isEmbed = searchParams.get('embed') === 'true';
 
   // Sync token state on mount
   useEffect(() => {
     setToken(getAuthToken());
+
+    const handleOpenModal = () => setIsCreateModalOpen(true);
+    window.addEventListener('open-project-creator', handleOpenModal);
+    return () => window.removeEventListener('open-project-creator', handleOpenModal);
   }, []);
 
   return (
@@ -38,17 +44,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Dynamic Action Buttons */}
             <div className="flex gap-2 ml-auto md:ml-0">
-              <NavLink 
-                to="/cli"
-                className={({ isActive }) => cn(
+              <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className={cn(
                   "border-2 border-on-surface px-4 md:px-6 py-2 font-mono text-sm uppercase font-bold transition-all hard-shadow whitespace-nowrap",
-                  isActive 
-                    ? "bg-white text-on-surface hover:-translate-y-1 hover:-translate-x-1" 
-                    : "bg-primary text-white hover:-translate-y-1 hover:-translate-x-1"
+                  "bg-primary text-white hover:-translate-y-1 hover:-translate-x-1"
                 )}
               >
-                CLI Access
-              </NavLink>
+                {token ? "Make Project" : "Sign In"}
+              </button>
             </div>
           </nav>
         </div>
@@ -61,6 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <footer className="bg-background border-t-4 border-on-surface flex flex-col md:flex-row justify-between items-center px-6 py-8 w-full font-mono text-xs uppercase tracking-widest">
         <div className="mb-4 md:mb-0 text-on-surface">(c) 2026 SWACN</div>
         <div className="flex gap-8 items-center">
+          <Link to="/cli" className="text-on-surface hover:text-primary">CLI Access</Link>
           <a className="text-on-surface hover:text-primary" href="#">GitHub</a>
           <a className="text-on-surface hover:text-primary" href="#">Discord</a>
           {token && (
@@ -79,6 +84,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
       )}
+
+      <ProjectCreatorModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
     </div>
   );
 }
