@@ -90,7 +90,7 @@ export function Home() {
           transition={{ delay: 0.2 }}
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-surface-container-low hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
-          <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-4 border-on-surface mb-4 group-hover:scale-110 transition-transform">
+          <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-2 border-on-surface mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
             <Terminal size={20} />
           </div>
           <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Record Everything</h3>
@@ -106,7 +106,7 @@ export function Home() {
           transition={{ delay: 0.3 }}
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
-          <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-4 border-on-surface mb-4 group-hover:scale-110 transition-transform">
+          <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-2 border-on-surface mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
             <PlayCircle size={20} />
           </div>
           <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Interactive Playback</h3>
@@ -122,7 +122,7 @@ export function Home() {
           transition={{ delay: 0.4 }}
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-primary text-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
-          <div className="w-10 h-10 bg-on-surface text-white flex items-center justify-center border-4 border-white/20 mb-4 group-hover:scale-110 transition-transform">
+          <div className="w-10 h-10 bg-on-surface text-white flex items-center justify-center border-2 border-white/20 mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
             <Share2 size={20} />
           </div>
           <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Embed Anywhere</h3>
