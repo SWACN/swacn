@@ -1,10 +1,22 @@
 #!/bin/bash
 set -e
 
-echo "==============================================="
-echo " Installing SWACN CLI (Linux / macOS)"
-echo "==============================================="
+# Terminal colors
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
 
+echo -e "${CYAN}${BOLD}"
+echo "   _____ _      __ ___   _________   __"
+echo "  / ___/| | /| / // _ | / ___/ |/ /"
+echo "  \__ \ | |/ |/ // __ |/ /__ /    / "
+echo " ___/ / |__/|__//_/ |_|\___//_/|_/  "
+echo "                                      "
+echo "  SWACN CLI Installer (Linux/macOS)   "
+echo -e "${NC}"
 # Detect OS
 OS="$(uname -s)"
 case "${OS}" in
@@ -32,19 +44,19 @@ fi
 ASSET_NAME="swacn-${OS_TARGET}-${ARCH_TARGET}"
 REPO="karthikeyjoshi/swacn"
 
-echo "Detected Platform: $OS_TARGET ($ARCH_TARGET)"
-echo "Fetching latest release from $REPO..."
+echo -e "${BOLD}Platform:${NC} $OS_TARGET ($ARCH_TARGET)"
+echo -e "${BOLD}Fetching latest release...${NC}"
 
 # Get the latest release from GitHub API
 LATEST_RELEASE_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url" | grep "$ASSET_NAME" | cut -d '"' -f 4)
 
 if [ -z "$LATEST_RELEASE_URL" ]; then
-    echo "Error: Could not find release asset for $ASSET_NAME."
-    echo "Please check https://github.com/$REPO/releases"
+    echo -e "${RED}Error: Could not find release asset for $ASSET_NAME.${NC}"
+    echo -e "Please check https://github.com/$REPO/releases"
     exit 1
 fi
 
-echo "Downloading from: $LATEST_RELEASE_URL"
+echo -e "${CYAN}Downloading from GitHub...${NC}"
 
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
@@ -53,11 +65,11 @@ DEST="$INSTALL_DIR/swacn"
 curl -# -L -o "$DEST" "$LATEST_RELEASE_URL"
 chmod +x "$DEST"
 
-echo "Successfully installed swacn to $DEST"
+echo -e "${GREEN}✔ Successfully installed swacn to $DEST${NC}"
 
 # Check if PATH contains ~/.local/bin
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    echo "Adding $INSTALL_DIR to your PATH..."
+    echo -e "${YELLOW}Adding $INSTALL_DIR to your PATH...${NC}"
     
     # Update bashrc
     if [ -f "$HOME/.bashrc" ]; then
@@ -73,12 +85,16 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         fi
     fi
 
-    echo "==============================================="
-    echo " ACTION REQUIRED: Restart your terminal"
-    echo "==============================================="
+    echo ""
+    echo -e "${YELLOW}╭──────────────────────────────────────────╮${NC}"
+    echo -e "${YELLOW}│  ${BOLD}ACTION REQUIRED: Restart your terminal${NC}${YELLOW}  │${NC}"
+    echo -e "${YELLOW}╰──────────────────────────────────────────╯${NC}"
     echo "Your shell configuration has been automatically updated."
     echo "Please open a NEW terminal window or run:"
-    echo "  source ~/.bashrc  # (or ~/.zshrc)"
+    echo -e "  ${CYAN}source ~/.bashrc${NC}  (or ~/.zshrc)"
+    echo ""
 else
-    echo "Installation complete! Try running 'swacn' in your terminal."
+    echo ""
+    echo -e "${GREEN}${BOLD}Installation complete!${NC} Try running '${CYAN}swacn${NC}' in your terminal."
+    echo ""
 fi
