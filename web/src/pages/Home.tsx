@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Rss, Settings2, Cpu, Terminal, ArrowRight } from 'lucide-react';
+import { PlayCircle, Share2, Terminal, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Home() {
@@ -68,12 +68,13 @@ export function Home() {
           <div className="p-4 md:p-6 font-mono text-sm text-surface-container-low flex-grow flex flex-col justify-center">
             <div className="flex gap-3 mb-2">
               <span className="text-primary font-bold">➜</span>
-              <span className="text-white">brew install swacn</span>
+              <span className="text-white">curl -sL https://swacn.com/install.sh | bash</span>
             </div>
             <div className="text-white/40 mb-6 text-xs leading-relaxed">
-              ==&gt; Downloading manifest...<br/>
-              ==&gt; Extracting binary...<br/>
-              ==&gt; Linking /usr/local/bin/swacn
+              SWACN CLI Installer (Linux/macOS)<br/>
+              Platform: macos (arm64)<br/>
+              Fetching latest release...<br/>
+              ✔ Successfully installed swacn to ~/.local/bin/swacn
             </div>
             <div className="flex gap-3">
               <span className="text-primary font-bold">➜</span>
@@ -90,11 +91,11 @@ export function Home() {
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-surface-container-low hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
           <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-4 border-on-surface mb-4 group-hover:scale-110 transition-transform">
-            <Rss size={20} />
+            <Terminal size={20} />
           </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Event Sourcing</h3>
+          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Record Everything</h3>
           <p className="font-mono text-xs text-on-surface/70 leading-relaxed">
-            Continuous tracking of all I/O operations. Roll back to any microsecond of your development history without git commits.
+            Capture stdout, keystrokes, and your project filesystem. SWACN guarantees a deterministic, pixel-perfect replay of your interactive session.
           </p>
         </motion.div>
 
@@ -106,11 +107,11 @@ export function Home() {
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
           <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-4 border-on-surface mb-4 group-hover:scale-110 transition-transform">
-            <Settings2 size={20} />
+            <PlayCircle size={20} />
           </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Side-Effect Injection</h3>
+          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Interactive Playback</h3>
           <p className="font-mono text-xs text-on-surface/70 leading-relaxed">
-            Decouple external dependencies by injecting mock side-effects directly at the runtime layer. Perfect for CI/CD isolation.
+            Don't just watch—interact. Pause the video at any timestamp to jump into a live v86 sandbox pre-loaded with your project's filesystem.
           </p>
         </motion.div>
 
@@ -122,11 +123,11 @@ export function Home() {
           className="col-span-1 md:col-span-4 border-4 border-on-surface bg-primary text-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
         >
           <div className="w-10 h-10 bg-on-surface text-white flex items-center justify-center border-4 border-white/20 mb-4 group-hover:scale-110 transition-transform">
-            <Cpu size={20} />
+            <Share2 size={20} />
           </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">WebVM Hydration</h3>
+          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Embed Anywhere</h3>
           <p className="font-mono text-xs text-white/70 leading-relaxed">
-            Run full environment states in the browser with zero overhead. Your terminal workspace, now accessible via a single URL.
+            Ditch static code blocks. Turn your docs and tutorials into live, shareable lab environments with a simple iframe embed.
           </p>
         </motion.div>
 
