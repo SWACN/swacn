@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Link, useSearchParams } from 'react-router-dom';
+import { NavLink, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { getAuthToken, logout } from '../lib/api';
 import { Copy, Check, Terminal, X, LogOut } from 'lucide-react';
@@ -9,7 +9,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const isEmbed = searchParams.get('embed') === 'true';
+
+  // Scroll to top on navigation
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   // Sync token state on mount
   useEffect(() => {
