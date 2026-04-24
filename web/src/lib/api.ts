@@ -36,3 +36,18 @@ export async function updateCastSettings(id: string, settings: { theme: string, 
   if (!res.ok) throw new Error("Failed to update cast settings");
   return res.json();
 }
+
+export async function deleteCast(id: string) {
+  const token = getAuthToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/v1/casts/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  if (!res.ok) throw new Error("Failed to delete cast");
+  return res.json();
+}

@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid } from 'lucide-react';
-import { fetchCasts, getAuthToken } from '../lib/api';
+import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo } from 'lucide-react';
+import { fetchCasts, getAuthToken, deleteCast } from '../lib/api';
 import { Link } from 'react-router-dom';
 
 export function Dashboard() {
   const [casts, setCasts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingCastId, setDeletingCastId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -38,6 +40,27 @@ export function Dashboard() {
     navigator.clipboard.writeText(url);
     setCopiedId(castId);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, castId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeletingCastId(castId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingCastId) return;
+    setIsDeleting(true);
+    try {
+      await deleteCast(deletingCastId);
+      setCasts(casts.filter(c => c.id !== deletingCastId));
+      setDeletingCastId(null);
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+      alert("Failed to delete project");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -72,8 +95,8 @@ export function Dashboard() {
           >
             {/* Top Bar */}
             <div className="border-b-4 border-on-surface p-4 flex justify-between items-center bg-surface-container-low">
-              <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-2 border-on-surface">
-                <Terminal size={20} />
+              <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-2 border-on-surface hard-shadow-sm">
+                <ListVideo size={20} />
               </div>
               <div className="font-mono text-xs font-bold uppercase px-3 py-1.5 border-2 border-on-surface bg-white opacity-70 group-hover:opacity-100 transition-opacity">
                 ID: {cast.id.substring(0, 8)}
@@ -92,11 +115,18 @@ export function Dashboard() {
               </div>
             </div>
             
-            {/* Actions Bar */}
             <div className="flex border-t-4 border-on-surface mt-auto">
               <button 
+                onClick={(e) => handleDeleteClick(e, cast.id)}
+                className="flex-1 flex items-center justify-center p-4 border-r-4 border-on-surface hover:bg-surface-container-high transition-colors font-mono text-xs font-bold uppercase z-20 relative gap-2 text-on-surface"
+                title="Delete Workspace"
+              >
+                DELETE
+              </button>
+
+              <button 
                 onClick={(e) => handleShare(e, cast.id)}
-                className="flex-1 flex items-center justify-center p-4 border-r-4 border-on-surface hover:bg-surface-container-high transition-colors font-mono text-xs font-bold uppercase z-20 relative gap-2"
+                className="flex-[2] flex items-center justify-center p-4 border-r-4 border-on-surface hover:bg-surface-container-high transition-colors font-mono text-xs font-bold uppercase z-20 relative gap-2"
                 title="Copy Link"
               >
                 {copiedId === cast.id ? (
@@ -140,6 +170,38 @@ export function Dashboard() {
           <div className="font-mono text-xs font-bold uppercase px-4 py-3 bg-surface-container-low border-2 border-on-surface flex items-center gap-4">
             <span>Run:</span>
             <code className="bg-white px-2 py-1 border border-on-surface">swacn record</code>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingCastId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="bg-white border-4 border-on-surface p-6 md:p-8 max-w-md w-full hard-shadow animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-4 mb-4 text-on-surface">
+              <h3 className="font-headline font-black text-2xl uppercase tracking-tighter text-on-surface">Delete Project?</h3>
+            </div>
+            
+            <p className="font-mono text-sm text-on-surface/80 leading-relaxed mb-8">
+              Are you absolutely sure you want to permanently delete this environment? This will wipe the workspace files from the server. This action cannot be undone.
+            </p>
+            
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setDeletingCastId(null)}
+                disabled={isDeleting}
+                className="flex-1 bg-surface-container-high border-2 border-on-surface py-3 font-mono text-sm font-bold uppercase transition-all hover:bg-surface-container-low disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 bg-on-surface text-white border-2 border-on-surface py-3 font-mono text-sm font-bold uppercase transition-all hover:bg-on-surface/90 hard-shadow-sm hover:-translate-y-1 hover:-translate-x-1 disabled:opacity-50 disabled:transform-none"
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
