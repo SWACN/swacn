@@ -1,13 +1,25 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Terminal, Download, Copy, Check, ChevronRight, Command, Package, Zap } from 'lucide-react';
-import { useState } from 'react';
 
 export function CLI() {
   const [copied, setCopied] = useState(false);
-  const installCmd = "curl -sS https://swacn.io/install.sh | bash";
+  const [installPlatform, setInstallPlatform] = useState<'unix' | 'windows'>('unix');
+
+  useEffect(() => {
+    // Basic OS detection
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (ua.includes('win')) {
+      setInstallPlatform('windows');
+    }
+  }, []);
+
+  const installCmdUnix = "curl -fsSL https://raw.githubusercontent.com/karthikeyjoshi/swacn/main/scripts/install.sh | bash";
+  const installCmdWindows = "irm https://raw.githubusercontent.com/karthikeyjoshi/swacn/main/scripts/install.ps1 | iex";
+
+  const currentCmd = installPlatform === 'unix' ? installCmdUnix : installCmdWindows;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(installCmd);
+    navigator.clipboard.writeText(currentCmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -28,14 +40,14 @@ export function CLI() {
             A high-performance binary written in C++ for real-time filesystem event sourcing. Zero dependencies, statically linked, and ready for your production pipeline.
           </p>
           <div className="flex flex-wrap gap-4">
-            <button className="bg-primary text-on-primary border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none hard-shadow flex items-center gap-4">
+            <a href="https://github.com/karthikeyjoshi/swacn/releases/latest" target="_blank" rel="noopener noreferrer" className="bg-primary text-on-primary border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none hard-shadow flex items-center gap-4">
               <Download size={24} />
-              Download Binary
-            </button>
-            <button className="bg-white text-on-surface border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none flex items-center gap-4">
+              Releases
+            </a>
+            <a href="https://github.com/karthikeyjoshi/swacn" target="_blank" rel="noopener noreferrer" className="bg-white text-on-surface border-4 border-on-surface px-8 py-4 text-xl font-bold hover:translate-x-[4px] hover:translate-y-[4px] transition-none flex items-center gap-4">
               <Package size={24} />
               View on GitHub
-            </button>
+            </a>
           </div>
         </div>
         <div className="md:w-1/2 w-full">
@@ -46,25 +58,48 @@ export function CLI() {
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
               </div>
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest opacity-50">Quick Install</span>
+              <div className="flex">
+                <button 
+                  onClick={() => setInstallPlatform('unix')}
+                  className={`font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 transition-colors ${installPlatform === 'unix' ? 'text-primary' : 'text-on-surface/50 hover:text-on-surface'}`}
+                >
+                  Mac / Linux
+                </button>
+                <button 
+                  onClick={() => setInstallPlatform('windows')}
+                  className={`font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 transition-colors ${installPlatform === 'windows' ? 'text-primary' : 'text-on-surface/50 hover:text-on-surface'}`}
+                >
+                  Windows
+                </button>
+              </div>
             </div>
-            <div className="p-8 font-mono text-background">
+            <div className="p-8 font-mono text-background min-h-[220px]">
               <p className="text-primary mb-4 text-sm"># One-liner installation script</p>
               <div className="flex items-center justify-between bg-white/5 p-4 border-2 border-white/10 group">
                 <code className="text-sm md:text-base text-white overflow-x-auto whitespace-nowrap scrollbar-hide">
-                  {installCmd}
+                  {currentCmd}
                 </code>
                 <button 
                   onClick={handleCopy}
-                  className="ml-4 p-2 hover:bg-white/10 transition-colors text-primary"
+                  className="ml-4 p-2 hover:bg-white/10 transition-colors text-primary flex-shrink-0"
                 >
                   {copied ? <Check size={20} /> : <Copy size={20} />}
                 </button>
               </div>
               <div className="mt-8 text-xs opacity-40 space-y-1">
-                <p>&gt; Verifying architecture: arm64</p>
-                <p>&gt; Fetching swacn-v1.0.4-macos-arm64.tar.gz...</p>
-                <p>&gt; Checking signature: 0x99A2... OK</p>
+                {installPlatform === 'unix' ? (
+                  <>
+                    <p>&gt; Verifying OS architecture...</p>
+                    <p>&gt; Fetching swacn release from GitHub...</p>
+                    <p>&gt; Installing to ~/.local/bin/swacn</p>
+                  </>
+                ) : (
+                  <>
+                    <p>&gt; Fetching swacn.exe release from GitHub...</p>
+                    <p>&gt; Installing to AppData\Local\swacn\swacn.exe</p>
+                    <p>&gt; Adding to user PATH...</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -138,7 +173,7 @@ export function CLI() {
           </div>
           <div className="flex flex-col items-center">
             <span className="font-bold text-4xl mb-2">🪟</span>
-            <span className="font-mono text-xs uppercase tracking-widest opacity-50">Windows (WSL2 Only)</span>
+            <span className="font-mono text-xs uppercase tracking-widest opacity-50">Windows (Native x86_64)</span>
           </div>
         </div>
       </section>

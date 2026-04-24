@@ -430,17 +430,14 @@ export function Lab() {
 
   const renderDownloadButton = (isEmbedSizing: boolean) => {
     if (!id || isDefaultSandbox) return null;
+    if (!hasBaseline) return null;
     if (!isOwner && !allowFsDownload) return null;
     
     return (
       <button 
         onClick={handleDownloadFs}
-        disabled={!hasBaseline}
-        className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 
-          ${hasBaseline 
-             ? 'text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer' 
-             : 'text-on-surface/30 border-on-surface/10 cursor-not-allowed bg-surface-container-high'}`}
-        title={!hasBaseline ? "No filesystem uploaded" : "Download filesystem"}
+        className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer`}
+        title="Download filesystem"
       >
         <Download size={isEmbedSizing ? 12 : 16} /> FS
       </button>

@@ -1,0 +1,57 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: swacn
+            asset_name: swacn-linux-x86_64
+          - os: macos-latest
+            artifact_name: swacn
+            asset_name: swacn-macos-arm64
+          - os: macos-13
+            artifact_name: swacn
+            asset_name: swacn-macos-x86_64
+          - os: windows-latest
+            artifact_name: swacn.exe
+            asset_name: swacn-windows-x86_64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libcurl4-openssl-dev
+
+      - name: Configure CMake
+        run: cmake -S cli -B cli/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build cli/build --config Release
+
+      - name: Prepare Artifact
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv cli/build/Release/${{ matrix.artifact_name }} ./${{ matrix.asset_name }}
+          else
+            mv cli/build/${{ matrix.artifact_name }} ./${{ matrix.asset_name }}
+          fi
+        shell: bash
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./${{ matrix.asset_name }}
+          generate_release_notes: true
