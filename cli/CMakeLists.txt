@@ -17,6 +17,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# Force static libraries so we get a single standalone executable
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
+set(CPR_FORCE_USE_SYSTEM_CURL OFF CACHE BOOL "Force CPR to build its own curl" FORCE)
+
 message(STATUS "[swacn] Fetching cpr (C++ Requests)...")
 FetchContent_Declare(
     cpr
