@@ -171,6 +171,7 @@ export function CLI() {
             { cmd: "swacn record", desc: "Start an interactive terminal recording." },
             { cmd: "swacn record --fs", desc: "Start recording AND capture the local filesystem state." },
             { cmd: "swacn record --keys", desc: "Start recording AND capture raw keystrokes." },
+            { cmd: "swacn record --norec", desc: "Setup the recording environment without launching a terminal recording." },
             { cmd: "swacn record --overwrite", desc: "Overwrite any existing recording in the .swacn directory." },
             { cmd: "swacn upload", desc: "Upload the finished recording to the SWACN cloud." },
           ].map((item, idx) => (

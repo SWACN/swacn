@@ -24,11 +24,14 @@ using json = nlohmann::json;
 void print_usage() {
     std::cout << "swacn - Interactive terminal recording\n\n";
     std::cout << "Usage:\n";
-    std::cout << "  swacn auth login <K>  # Verify and save your API key\n";
-    std::cout << "  swacn record          # Start recording output only\n";
-    std::cout << "  swacn record --fs     # Start recording output AND capture filesystem state\n";
-    std::cout << "  swacn record --keys   # Start recording output AND capture keystrokes\n";
-    std::cout << "  swacn upload          # Upload the recording\n";
+    std::cout << "  swacn auth login <K>     # Verify and save your API key\n";
+    std::cout << "  swacn record             # Start recording output only\n";
+    std::cout << "  swacn record --fs        # Start recording output AND capture filesystem state\n";
+    std::cout << "  swacn record --keys      # Start recording output AND capture keystrokes\n";
+    std::cout << "  swacn record --norec     # Setup the recording environment without launching a terminal recording\n";
+    std::cout << "  swacn record --overwrite # Overwrite any existing recording in the .swacn directory\n";
+    std::cout << "  swacn upload             # Upload the recording\n";
+    std::cout << "  swacn list               # List your SWACN recordings\n";
 }
 
 fs::path get_credentials_path() {
@@ -187,10 +190,13 @@ void upload_project() {
 
     cpr::Multipart multipart_data{};
     multipart_data.parts.push_back(cpr::Part{"manifest", cpr::File{manifest_path.string()}});
+    std::uintmax_t total_size = 0;
+    try { total_size += fs::file_size(manifest_path); } catch (...) {}
     
     fs::path cast_path = ".swacn/demo.cast";
     if (fs::exists(cast_path)) {
         multipart_data.parts.push_back(cpr::Part{"recording", cpr::File{cast_path.string()}});
+        try { total_size += fs::file_size(cast_path); } catch (...) {}
     }
 
     if (manifest_json.contains("baseline")) {
@@ -200,6 +206,12 @@ void upload_project() {
             return;
         }
         multipart_data.parts.push_back(cpr::Part{"baseline", cpr::File{baseline_path.string()}});
+        try { total_size += fs::file_size(baseline_path); } catch (...) {}
+    }
+
+    if (total_size > 2 * 1024 * 1024) {
+        std::cerr << "[swacn] Error: Your project exceeds the 2 MB upload limit. Please consider excluding large files or reducing your recording size.\n";
+        return;
     }
 
     std::string api_endpoint = get_api_base_url() + "/v1/casts/upload";
@@ -209,9 +221,16 @@ void upload_project() {
     cpr::Response r = cpr::Post(cpr::Url{api_endpoint}, multipart_data, headers);
 
     if (r.status_code >= 200 && r.status_code < 300) {
-        std::cout << "[swacn] Upload successful!\n" << "Server response: " << r.text << "\n";
+        std::cout << "[swacn] Upload successful!\n";
     } else {
-        std::cerr << "[swacn] Upload failed with HTTP Status: " << r.status_code << "\n" << r.text << "\n";
+        std::string error_msg = r.text;
+        try {
+            json resp_json = json::parse(r.text);
+            if (resp_json.contains("error")) {
+                error_msg = resp_json["error"].get<std::string>();
+            }
+        } catch (...) {}
+        std::cerr << "[swacn] Upload failed: " << error_msg << "\n";
     }
 }
 
@@ -274,6 +293,10 @@ void list_projects() {
         std::cout << "--------------------------------------------------\n";
         for (const auto& cast : casts) {
             std::cout << "ID:      " << cast["id"].get<std::string>() << "\n";
+            std::string name = cast.value("name", "");
+            if (!name.empty()) {
+                std::cout << "Name:    " << name << "\n";
+            }
             std::cout << "Date:    " << cast["created_at"].get<std::string>() << "\n";
             std::cout << "URL:     " << cast["url"].get<std::string>() << "\n";
             std::cout << "--------------------------------------------------\n";

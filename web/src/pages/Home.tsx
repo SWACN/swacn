@@ -39,12 +39,9 @@ export function Home() {
             </p>
             
             <div className="mt-auto flex flex-wrap gap-4">
-              <Link to="/dashboard" className="bg-primary text-white border-4 border-on-surface px-6 py-3 font-mono text-xs md:text-sm uppercase font-bold hover:bg-on-surface transition-colors flex items-center gap-2">
-                Launch Dashboard <ArrowRight size={18} />
+              <Link to="/dashboard" className="bg-primary text-white border-4 border-on-surface hard-shadow hover:-translate-y-1 hover:-translate-x-1 px-8 py-4 font-mono text-sm md:text-base uppercase font-bold hover:bg-on-surface transition-all flex items-center gap-2">
+                Launch Dashboard <ArrowRight size={20} />
               </Link>
-              <button className="bg-surface-container-high text-on-surface border-4 border-on-surface px-6 py-3 font-mono text-xs md:text-sm uppercase font-bold hover:bg-white transition-colors">
-                Read Manifest
-              </button>
             </div>
           </div>
         </motion.div>
