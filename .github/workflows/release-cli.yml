@@ -12,7 +12,10 @@ jobs:
   build-and-release:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest

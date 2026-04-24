@@ -2,10 +2,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <unistd.h>
 #ifdef _WIN32
 #include <process.h>
 #else
+#include <unistd.h>
 #include <sys/wait.h>
 #endif
 #include <filesystem>
