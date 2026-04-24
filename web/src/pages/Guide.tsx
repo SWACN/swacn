@@ -83,7 +83,7 @@ export function Guide() {
             <div className="flex-grow">
               <h3 className="text-3xl font-black font-headline uppercase tracking-tighter mb-4">Configuration</h3>
               <p className="text-lg mb-4 leading-relaxed max-w-2xl">
-                Create a <code className="bg-on-surface/10 px-2 py-1 rounded text-sm font-bold">swacn.config</code> in your project root. This tells SWACN what your project is about and, crucially, how to fetch the required <strong>Linux i386 compiled binaries</strong> for the v86 environment.
+                Create a <code className="bg-on-surface/10 px-2 py-1 rounded text-sm font-bold">swacn.json</code> in your project root. This tells SWACN what your project is about and, crucially, how to fetch the required <strong>statically linked 32-bit x86 Linux binaries (e.g., i386, x86_32)</strong> for the v86 environment.
               </p>
               <div className="bg-background border-2 border-on-surface p-4 font-mono text-sm overflow-x-auto mb-6 max-w-2xl">
 <pre className="text-on-surface/90">{`{
@@ -92,7 +92,7 @@ export function Guide() {
     "PATH": "/usr/local/bin:/bin:/usr/bin"
   },
   "binaries": {
-    "i386": [
+    "x86_32": [
       {
         "name": "yq",
         "url": "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_386",

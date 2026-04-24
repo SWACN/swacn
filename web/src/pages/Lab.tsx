@@ -7,7 +7,8 @@ import * as AsciinemaPlayer from 'asciinema-player';
 import 'asciinema-player/dist/bundle/asciinema-player.css';
 import '@xterm/xterm/css/xterm.css';
 
-import { fetchCasts, fetchCastDetails, updateCastSettings } from '../lib/api';
+import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken } from '../lib/api';
+import { TarBuilder } from '../lib/TarBuilder';
 import { V86VM, VMStatus } from '../lib/V86VM';
 
 type Tab = 'projects' | 'settings';
@@ -51,6 +52,16 @@ export function Lab() {
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [allowFsDownload, setAllowFsDownload] = useState<boolean>(true);
   const [hasBaseline, setHasBaseline] = useState<boolean>(false);
+
+  // Project Creation State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createProjectName, setCreateProjectName] = useState('');
+  const [createEnvVars, setCreateEnvVars] = useState('');
+  const [createTools, setCreateTools] = useState('');
+  const [createFiles, setCreateFiles] = useState<FileList | null>(null);
+  const [createRecordingFile, setCreateRecordingFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -142,6 +153,127 @@ export function Lab() {
     setAllowFsDownload(allow);
     if (id && isOwner) {
       updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allow }).catch(console.error);
+    }
+  };
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (projects.length >= 15) {
+      setUploadError("Project limit reached. You have 15 active projects.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      const token = getAuthToken();
+      if (!token) throw new Error("Not authenticated");
+
+      const manifest: any = {
+        version: "0.1.0",
+        timestamp: Math.floor(Date.now() / 1000),
+        environment: {
+          project: createProjectName,
+          env: {},
+          binaries: { x86_32: [] }
+        }
+      };
+
+      if (createEnvVars.trim()) {
+        createEnvVars.split('\n').forEach(line => {
+          const [k, ...v] = line.split('=');
+          if (k && v.length) manifest.environment.env[k.trim()] = v.join('=').trim();
+        });
+      }
+
+      if (createTools.trim()) {
+        createTools.split('\n').forEach(line => {
+          const trimmedLine = line.trim();
+          if (trimmedLine) {
+            let name, url;
+            const eqIndex = trimmedLine.indexOf('=');
+            if (eqIndex > 0) {
+              name = trimmedLine.substring(0, eqIndex).trim();
+              url = trimmedLine.substring(eqIndex + 1).trim();
+            } else {
+              url = trimmedLine;
+              name = url.split('/').pop() || 'tool';
+            }
+            manifest.environment.binaries.x86_32.push({
+              name,
+              url,
+              install_path: `/usr/bin/${name}`
+            });
+          }
+        });
+      }
+
+      const formData = new FormData();
+      let totalSize = 0;
+
+      if (createFiles && createFiles.length > 0) {
+        manifest.baseline = "baseline.tar.gz";
+        const builder = new TarBuilder();
+        
+        for (let i = 0; i < createFiles.length; i++) {
+          const file = createFiles[i];
+          const relativePath = file.webkitRelativePath || file.name;
+          const pathParts = relativePath.split('/');
+          if (pathParts.length > 1) pathParts.shift();
+          const finalPath = pathParts.join('/') || relativePath;
+
+          const buffer = await file.arrayBuffer();
+          builder.addFile(finalPath, new Uint8Array(buffer));
+        }
+
+        const tarBlob = builder.build();
+        
+        if (typeof CompressionStream !== 'undefined') {
+          const compressedStream = tarBlob.stream().pipeThrough(new CompressionStream('gzip'));
+          const gzipBlob = await new Response(compressedStream).blob();
+          totalSize += gzipBlob.size;
+          formData.append('baseline', gzipBlob, 'baseline.tar.gz');
+        } else {
+          throw new Error("Browser does not support CompressionStream");
+        }
+      }
+
+      if (createRecordingFile) {
+        totalSize += createRecordingFile.size;
+        formData.append('recording', createRecordingFile, 'recording.cast');
+      }
+
+      const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+      totalSize += manifestBlob.size;
+
+      if (totalSize > 2 * 1024 * 1024) {
+        throw new Error("Project size exceeds the 2 MB limit.");
+      }
+
+      formData.append('manifest', manifestBlob, 'manifest.json');
+
+      const res = await fetch('/api/v1/casts/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+
+      setIsCreateModalOpen(false);
+      setCreateProjectName('');
+      setCreateEnvVars('');
+      setCreateTools('');
+      setCreateFiles(null);
+      setCreateRecordingFile(null);
+      fetchCasts().then(setProjects).catch(console.error);
+      navigate(`/lab/${data.cast_id}`);
+    } catch (err: any) {
+      setUploadError(err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -600,6 +732,13 @@ export function Lab() {
                 <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2">Workspaces</h2>
                 
                 <div 
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="p-4 border-2 border-dashed border-on-surface cursor-pointer font-mono text-sm flex items-center justify-center gap-3 transition-colors bg-surface-container-high hover:bg-white text-on-surface/60 hover:text-on-surface mb-4 group"
+                >
+                  <span className="font-bold uppercase tracking-widest group-hover:scale-105 transition-transform">+ Make New Project</span>
+                </div>
+
+                <div 
                   onClick={() => navigate('/lab')}
                   className={`p-4 border-2 border-on-surface cursor-pointer font-mono text-sm flex items-center gap-3 transition-colors ${!id ? 'bg-primary text-white hard-shadow' : 'bg-white hover:bg-surface-container-low'}`}
                 >
@@ -834,6 +973,112 @@ export function Lab() {
 
         </section>
       </div>
+
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/40 backdrop-blur-sm">
+          <div className="bg-background border-4 border-on-surface w-full max-w-2xl hard-shadow overflow-hidden flex flex-col max-h-full">
+            <div className="bg-on-surface p-4 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2 text-background font-mono text-sm font-bold">
+                <SquareTerminal size={18} />
+                <span>NEW_SWACN_PROJECT</span>
+              </div>
+              <button onClick={() => setIsCreateModalOpen(false)} className="text-background hover:text-primary">
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            <div className="p-8 overflow-y-auto">
+              <h2 className="font-headline text-3xl font-black uppercase mb-4 tracking-tighter">Create Project</h2>
+              
+              {uploadError && (
+                <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-3 mb-6 font-mono text-sm font-bold">
+                  {uploadError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateProject} className="space-y-6">
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Project Name</label>
+                  <input 
+                    type="text" 
+                    value={createProjectName}
+                    onChange={(e) => setCreateProjectName(e.target.value)}
+                    className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors"
+                    placeholder="my-awesome-project"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Environment Variables (KEY=value)</label>
+                  <textarea 
+                    value={createEnvVars}
+                    onChange={(e) => setCreateEnvVars(e.target.value)}
+                    className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
+                    placeholder="NODE_ENV=production&#10;DEBUG=true"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Tool Binaries (name=url, one per line)</label>
+                  <textarea 
+                    value={createTools}
+                    onChange={(e) => setCreateTools(e.target.value)}
+                    className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
+                    placeholder="yq=https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_386"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
+                  <div className="bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm">
+                    <input 
+                      type="file" 
+                      // @ts-ignore
+                      webkitdirectory="true" 
+                      directory=""
+                      onChange={(e) => setCreateFiles(e.target.files)}
+                      className="w-full cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:border-2 file:border-on-surface file:text-sm file:font-mono file:font-bold file:bg-white file:text-on-surface hover:file:bg-on-surface hover:file:text-white file:transition-colors"
+                    />
+                    {createFiles && createFiles.length > 0 && (
+                      <div className="mt-2 text-xs opacity-70 font-bold">
+                        Selected folder: {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Terminal Recording (.cast file)</label>
+                  <div className="bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm">
+                    <input 
+                      type="file" 
+                      accept=".cast"
+                      onChange={(e) => setCreateRecordingFile(e.target.files?.[0] || null)}
+                      className="w-full cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:border-2 file:border-on-surface file:text-sm file:font-mono file:font-bold file:bg-white file:text-on-surface hover:file:bg-on-surface hover:file:text-white file:transition-colors"
+                    />
+                    {createRecordingFile && (
+                      <div className="mt-2 text-xs opacity-70 font-bold">
+                        Selected recording: {createRecordingFile.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-6">
+                  <button 
+                    type="submit"
+                    disabled={isUploading}
+                    className={`w-full border-4 border-on-surface px-8 py-4 text-xl font-bold transition-none hard-shadow flex items-center justify-center gap-4 ${isUploading ? 'bg-surface-container-high text-on-surface/50 cursor-not-allowed' : 'bg-primary text-white hover:translate-x-[4px] hover:translate-y-[4px]'}`}
+                  >
+                    {isUploading ? 'Building Sandbox...' : 'Create Project'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

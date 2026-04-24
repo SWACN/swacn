@@ -175,8 +175,9 @@ export class V86VM {
           }
         }
 
-        // Read from manifest.binaries using i386 target convention (with legacy x86_64 fallback)
-        const binariesList = manifest.binaries?.i386 ?? manifest.environment?.binaries?.i386 ?? 
+        // Read from manifest.binaries using x86_32 target convention (with legacy i386/x86_64 fallback)
+        const binariesList = manifest.binaries?.x86_32 ?? manifest.environment?.binaries?.x86_32 ??
+                             manifest.binaries?.i386 ?? manifest.environment?.binaries?.i386 ?? 
                              manifest.binaries?.x86_64 ?? manifest.environment?.binaries?.x86_64 ?? [];
         if (binariesList.length > 0) {
           for (const tool of binariesList) {

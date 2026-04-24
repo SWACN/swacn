@@ -4,7 +4,7 @@
     "PATH": "/usr/local/bin:/bin:/usr/bin"
   },
   "binaries": {
-    "i386": [
+    "x86_32": [
       {
         "name": "yq",
         "url": "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_386",
