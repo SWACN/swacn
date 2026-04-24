@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink } from 'lucide-react';
+import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
@@ -49,6 +49,8 @@ export function Lab() {
   const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [allowFsDownload, setAllowFsDownload] = useState<boolean>(true);
+  const [hasBaseline, setHasBaseline] = useState<boolean>(false);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -92,6 +94,8 @@ export function Lab() {
           setTheme('swacn-dark');
         }
         setShowKeystrokes(details.show_keystrokes);
+        setAllowFsDownload(details.allow_fs_download ?? true);
+        setHasBaseline(details.has_baseline ?? false);
         setHasRecording(details.has_recording);
         setIsSandboxMode(!details.has_recording);
         if (details.name) setProjectName(details.name);
@@ -104,6 +108,8 @@ export function Lab() {
       // Base Sandbox: always interactive, no recording
       setTheme('swacn-dark');
       setShowKeystrokes(false);
+      setAllowFsDownload(false);
+      setHasBaseline(false);
       setHasRecording(false);
       setIsSandboxMode(true);
     }
@@ -121,14 +127,21 @@ export function Lab() {
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
     if (id && isOwner) {
-      updateCastSettings(id, { theme: newTheme, show_keystrokes: showKeystrokes }).catch(console.error);
+      updateCastSettings(id, { theme: newTheme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload }).catch(console.error);
     }
   };
 
   const handleKeystrokesChange = (show: boolean) => {
     setShowKeystrokes(show);
     if (id && isOwner) {
-      updateCastSettings(id, { theme, show_keystrokes: show }).catch(console.error);
+      updateCastSettings(id, { theme, show_keystrokes: show, allow_fs_download: allowFsDownload }).catch(console.error);
+    }
+  };
+
+  const handleFsDownloadChange = (allow: boolean) => {
+    setAllowFsDownload(allow);
+    if (id && isOwner) {
+      updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allow }).catch(console.error);
     }
   };
 
@@ -409,6 +422,31 @@ export function Lab() {
   const currentPalette = currentThemeConfig.palette.split(':');
   const isDarkTheme = theme !== 'latte' && theme !== 'swacn';
 
+  const handleDownloadFs = () => {
+    if (baselineUrl && hasBaseline) {
+      window.open(baselineUrl, '_blank');
+    }
+  };
+
+  const renderDownloadButton = (isEmbedSizing: boolean) => {
+    if (!id || isDefaultSandbox) return null;
+    if (!isOwner && !allowFsDownload) return null;
+    
+    return (
+      <button 
+        onClick={handleDownloadFs}
+        disabled={!hasBaseline}
+        className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 
+          ${hasBaseline 
+             ? 'text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer' 
+             : 'text-on-surface/30 border-on-surface/10 cursor-not-allowed bg-surface-container-high'}`}
+        title={!hasBaseline ? "No filesystem uploaded" : "Download filesystem"}
+      >
+        <Download size={isEmbedSizing ? 12 : 16} /> FS
+      </button>
+    );
+  };
+
   const renderActionButton = (isEmbedSizing: boolean) => {
     if (isSandboxMode && hasRecording && !isDefaultSandbox) {
       return (
@@ -619,6 +657,20 @@ export function Lab() {
                     <span className="font-bold">Show Overlay</span>
                   </label>
                 </div>
+
+                <div className={!hasBaseline ? 'opacity-50 grayscale pointer-events-none' : ''}>
+                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Download size={20}/> Filesystem Download</h2>
+                  <label className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors font-mono text-sm">
+                    <input 
+                      type="checkbox" 
+                      checked={allowFsDownload} 
+                      onChange={(e) => handleFsDownloadChange(e.target.checked)}
+                      disabled={!hasBaseline}
+                      className="accent-primary w-4 h-4"
+                    />
+                    <span className="font-bold">Allow Viewers to Download</span>
+                  </label>
+                </div>
    
                </div>
              </div>
@@ -663,7 +715,8 @@ export function Lab() {
             </div>
             
             {/* Main Header Action Button */}
-            <div className="flex items-center z-20">
+            <div className="flex items-center gap-2 z-20">
+              {renderDownloadButton(false)}
               {renderActionButton(false)}
             </div>
           </div>
@@ -682,7 +735,8 @@ export function Lab() {
               </div>
               
               {/* Embed Header Action Button */}
-              <div className="flex items-center z-20">
+              <div className="flex items-center gap-2 z-20">
+                {renderDownloadButton(true)}
                 {renderActionButton(true)}
               </div>
             </div>

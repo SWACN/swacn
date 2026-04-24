@@ -20,7 +20,7 @@ export async function fetchCastDetails(id: string) {
   return res.json();
 }
 
-export async function updateCastSettings(id: string, settings: { theme: string, show_keystrokes: boolean }) {
+export async function updateCastSettings(id: string, settings: { theme: string, show_keystrokes: boolean, allow_fs_download: boolean }) {
   const token = getAuthToken();
   if (!token) throw new Error("Not authenticated");
 

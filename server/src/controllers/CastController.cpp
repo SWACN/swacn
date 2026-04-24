@@ -99,7 +99,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 
             // 5. Update Database utilizing NULLIF for the empty string fallback
             dbClient->execSqlAsync(
-                "INSERT INTO casts (user_id, project_name, manifest_url, baseline_url, recording_url, show_keystrokes) VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''), NULLIF($5, ''), $6)",
+                "INSERT INTO casts (user_id, project_name, manifest_url, baseline_url, recording_url, show_keystrokes, allow_fs_download) VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7)",
                 [callback, cast_uuid](const drogon::orm::Result& res) {
                     
                     const char* env_url = getenv("APP_URL");
@@ -126,7 +126,8 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                 cast_uuid + "/manifest.json", 
                 baseline_val, 
                 recording_val,
-                has_keystrokes
+                has_keystrokes,
+                true // allow_fs_download
             );
         },
         [callback](const drogon::orm::DrogonDbException& e) {
@@ -143,7 +144,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     std::string like_pattern = id + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT id, project_name, manifest_url, recording_url, theme, show_keystrokes, created_at "
+        "SELECT id, project_name, manifest_url, baseline_url, recording_url, theme, show_keystrokes, allow_fs_download, created_at "
         "FROM casts WHERE manifest_url LIKE $1",
         [callback, id](const drogon::orm::Result& r) {
             if (r.empty()) {
@@ -158,8 +159,10 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
             castObj["id"] = id;
             castObj["name"] = row["project_name"].isNull() ? "" : row["project_name"].as<std::string>();
             castObj["has_recording"] = !row["recording_url"].isNull();
+            castObj["has_baseline"] = !row["baseline_url"].isNull();
             castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
             castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
+            castObj["allow_fs_download"] = row["allow_fs_download"].isNull() ? true : row["allow_fs_download"].as<bool>();
             
             callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
         },
@@ -192,15 +195,16 @@ void CastController::updateCastSettings(const drogon::HttpRequestPtr& req, std::
 
     std::string theme = (*jsonPtr)["theme"].asString();
     bool show_keystrokes = (*jsonPtr)["show_keystrokes"].asBool();
+    bool allow_fs_download = (*jsonPtr)["allow_fs_download"].asBool();
 
     auto dbClient = drogon::app().getDbClient();
     std::string like_pattern = id + "/%";
 
     // Verify ownership and update in one query using the api_key
     dbClient->execSqlAsync(
-        "UPDATE casts SET theme = $1, show_keystrokes = $2 "
+        "UPDATE casts SET theme = $1, show_keystrokes = $2, allow_fs_download = $3 "
         "FROM users "
-        "WHERE casts.user_id = users.id AND users.api_key = $3 AND casts.manifest_url LIKE $4 "
+        "WHERE casts.user_id = users.id AND users.api_key = $4 AND casts.manifest_url LIKE $5 "
         "RETURNING casts.id",
         [callback](const drogon::orm::Result& r) {
             if (r.empty()) {
@@ -220,6 +224,7 @@ void CastController::updateCastSettings(const drogon::HttpRequestPtr& req, std::
         },
         theme,
         show_keystrokes,
+        allow_fs_download,
         api_key,
         like_pattern
     );
@@ -238,7 +243,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
     auto dbClient = drogon::app().getDbClient();
     
     dbClient->execSqlAsync(
-        "SELECT c.id, c.project_name, c.manifest_url, c.recording_url, c.theme, c.show_keystrokes, c.created_at "
+        "SELECT c.id, c.project_name, c.manifest_url, c.baseline_url, c.recording_url, c.theme, c.show_keystrokes, c.allow_fs_download, c.created_at "
         "FROM casts c JOIN users u ON c.user_id = u.id "
         "WHERE u.api_key = $1 ORDER BY c.created_at DESC",
         [callback](const drogon::orm::Result& r) {
@@ -257,8 +262,10 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
                 castObj["name"] = row["project_name"].isNull() ? "" : row["project_name"].as<std::string>();
                 castObj["url"] = base_url + "/view/" + uuid;
                 castObj["has_recording"] = !row["recording_url"].isNull();
+                castObj["has_baseline"] = !row["baseline_url"].isNull();
                 castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
                 castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
+                castObj["allow_fs_download"] = row["allow_fs_download"].isNull() ? true : row["allow_fs_download"].as<bool>();
                 castObj["created_at"] = row["created_at"].as<std::string>();
                 casts.append(castObj);
             }

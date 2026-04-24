@@ -1,14 +1,18 @@
-#include "watcher.hpp"
+
 #include <iostream>
 #include <string>
 #include <vector>
 #include <unistd.h>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <sys/wait.h>
+#endif
 #include <filesystem>
 #include <fstream>
 #include <ctime>
 #include <cstdlib>
-#include <efsw/efsw.hpp>
+
 #include <nlohmann/json.hpp>
 #include <cpr/cpr.h>
 
@@ -29,6 +33,7 @@ void print_usage() {
 
 fs::path get_credentials_path() {
     const char* home = getenv("HOME");
+    if (!home) home = getenv("USERPROFILE");
     if (!home) return "";
     return fs::path(home) / ".config" / "swacn" / "credentials.json";
 }
@@ -113,13 +118,23 @@ bool prepare_recording_environment(bool capture_fs) {
     manifest_json["timestamp"] = std::time(nullptr);
 
     if (capture_fs) {
+#ifdef __APPLE__
         std::string tar_cmd = "env COPYFILE_DISABLE=1 tar -czf .swacn/baseline.tar.gz "
-                              "--exclude='.swacn' "
-                              "--exclude='.git' "
-                              "--exclude='node_modules' "
-                              "--exclude='target' " 
-                              "--exclude='build' "  
+                              "--exclude=.swacn "
+                              "--exclude=.git "
+                              "--exclude=node_modules "
+                              "--exclude=target " 
+                              "--exclude=build "  
                               ".";
+#else
+        std::string tar_cmd = "tar -czf .swacn/baseline.tar.gz "
+                              "--exclude=.swacn "
+                              "--exclude=.git "
+                              "--exclude=node_modules "
+                              "--exclude=target " 
+                              "--exclude=build "  
+                              ".";
+#endif
         
         std::cout << "[swacn] Capturing baseline filesystem state...\n";
         int result = std::system(tar_cmd.c_str());
@@ -201,6 +216,20 @@ void upload_project() {
 }
 
 void launch_asciinema(const std::string& output_file, bool capture_keys, bool capture_fs, bool overwrite) {
+    std::vector<const char*> args = {"asciinema", "rec"};
+    if (capture_keys) args.push_back("--stdin");
+    if (overwrite) args.push_back("--overwrite");
+    args.push_back(output_file.c_str());
+    args.push_back(nullptr);
+
+#ifdef _WIN32
+    intptr_t result = _spawnvp(_P_WAIT, args[0], const_cast<char* const*>(args.data()));
+    if (result < 0) {
+        std::cerr << "[swacn] Error: Failed to launch asciinema. Is it in your PATH?\n";
+    } else {
+        std::cout << "[swacn] Recording finished.\n";
+    }
+#else
     pid_t pid = fork();
 
     if (pid < 0) {
@@ -210,30 +239,15 @@ void launch_asciinema(const std::string& output_file, bool capture_keys, bool ca
 
     if (pid == 0) {
         // Child: Run asciinema
-        std::vector<const char*> args = {"asciinema", "rec"};
-        if (capture_keys) args.push_back("--stdin");
-        if (overwrite) args.push_back("--overwrite");
-        args.push_back(output_file.c_str());
-        args.push_back(nullptr);
-        
         execvp(args[0], const_cast<char* const*>(args.data()));
+        std::cerr << "[swacn] Error: Failed to launch asciinema. Is it in your PATH?\n";
         exit(1); 
     } else {
-        // Parent: File watcher (Optional)
-        if (capture_fs) {
-            efsw::FileWatcher fileWatcher;
-            SwacnUpdateListener listener(output_file);
-            efsw::WatchID watchID = fileWatcher.addWatch(".", &listener, true);
-            fileWatcher.watch();
-
-            waitpid(pid, nullptr, 0);
-            fileWatcher.removeWatch(watchID);
-            std::cout << "[swacn] Recording finished and fs watcher terminated.\n";
-        } else {
-            waitpid(pid, nullptr, 0);
-            std::cout << "[swacn] Recording finished.\n";
-        }
+        // Parent: Wait for child
+        waitpid(pid, nullptr, 0);
+        std::cout << "[swacn] Recording finished.\n";
     }
+#endif
 }
 
 void list_projects() {
@@ -296,7 +310,10 @@ int main(int argc, char* argv[]) {
             std::string arg = argv[i];
             if (arg == "--keys") capture_keys = true;
             if (arg == "--fs") capture_fs = true;
-            if (arg == "--overwrite") overwrite = true;
+            if (arg == "--overwrite") {
+                overwrite = true;
+                capture_fs = true;
+            }
             if (arg == "--norec") no_rec = true;
         }
 

@@ -15,11 +15,11 @@ export function Home() {
           animate={{ opacity: 1, y: 0 }}
           className="col-span-1 md:col-span-8 border-4 border-on-surface bg-white hard-shadow p-6 md:p-10 relative overflow-hidden group hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300"
         >
-          <div className="absolute -right-20 -bottom-20 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-700">
+          <div className="absolute -right-24 -bottom-24 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-700">
             <img 
               alt="SWACN Logo" 
-              className="w-64 h-64 grayscale contrast-125" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuANMmxkivF9nkF-19t-8MKYyCvzV14SxMApgyuz2usFg31rDTUVutxRPpxTACQ-i-PhSKc3IiV42ab61lkdTBMNtkl4Q8m47dnd5QMx6OqeFQeKjbaT9DJz8bWPHLv9yLerYNmuV3gQWqGhmxHjK6l5WFjxc8zyc9Tle8-cu-HaKpQwobeWgA2tpbCZ4Mg7LFHgDJGH-S3akCvxXkxtL5kEoY04pHvaZH9GdryOp1v9oYlD6NrklO0rDYxidlwkOqs8XpWdEGJr_Y2l"
+              className="w-96 h-96 grayscale contrast-125" 
+              src="../../assets/logo.png"
               referrerPolicy="no-referrer"
             />
           </div>

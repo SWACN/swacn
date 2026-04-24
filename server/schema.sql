@@ -17,5 +17,6 @@ CREATE TABLE casts (
     recording_url TEXT,
     theme VARCHAR(255) DEFAULT 'swacn-dark',
     show_keystrokes BOOLEAN DEFAULT TRUE,
+    allow_fs_download BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
