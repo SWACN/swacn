@@ -165,12 +165,24 @@ export function Dashboard() {
           </div>
           <h3 className="font-headline font-black text-3xl md:text-4xl mb-4 uppercase tracking-tight text-on-surface">No Environments</h3>
           <p className="font-mono text-sm md:text-base opacity-70 max-w-lg mb-8">
-            Your workspace panel is empty. You need to record and upload a runtime session from your local machine.
+            Your workspace panel is empty. You can record a session from your local machine using the CLI, or upload project files directly via the browser.
           </p>
-          <div className="font-mono text-xs font-bold uppercase px-4 py-3 bg-surface-container-low border-2 border-on-surface flex items-center gap-4">
-            <span>Run:</span>
-            <code className="bg-white px-2 py-1 border border-on-surface">swacn record</code>
+          <div className="flex flex-col md:flex-row gap-6 items-center mb-8">
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('open-project-creator'))}
+              className="bg-primary text-white border-4 border-on-surface px-8 py-4 font-mono text-sm font-bold uppercase hard-shadow hover:-translate-y-1 hover:-translate-x-1 transition-all"
+            >
+              Upload via Website
+            </button>
+            <div className="font-mono text-xs font-bold uppercase px-4 py-3 bg-surface-container-low border-2 border-on-surface flex items-center gap-4">
+              <span>CLI:</span>
+              <code className="bg-white px-2 py-1 border border-on-surface">swacn record</code>
+            </div>
           </div>
+
+          <Link to="/guide" className="font-mono text-xs font-bold uppercase text-on-surface/50 hover:text-primary flex items-center gap-2 group transition-colors">
+            New here? Read the Guide <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
         </div>
       )}
 

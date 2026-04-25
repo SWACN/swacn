@@ -29,11 +29,19 @@
 }
 
 .hard-shadow {
-  box-shadow: 4px 4px 0px 0px var(--color-on-surface);
+  box-shadow: 3px 3px 0px 0px var(--color-on-surface);
+}
+
+.hard-shadow-light {
+  box-shadow: 2px 2px 0px 0px rgba(252, 249, 240, 0.1);
 }
 
 .hard-shadow-sm {
   box-shadow: 2px 2px 0px 0px var(--color-on-surface);
+}
+
+.hard-shadow-sm-light {
+  box-shadow: 2px 2px 0px 0px rgba(252, 249, 240, 0.05);
 }
 
 .scrollbar-hide::-webkit-scrollbar {

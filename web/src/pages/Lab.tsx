@@ -43,15 +43,27 @@ export function Lab() {
   const isEmbed = searchParams.get('embed') === 'true';
   
   const [activeTab, setActiveTab] = useState<Tab>('projects');
-  const [theme, setTheme] = useState<Theme>('swacn-dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (!id) return 'swacn-dark';
+    const cached = localStorage.getItem(`swacn_theme_${id}`);
+    return (cached as Theme) || 'swacn-dark';
+  });
   const [projects, setProjects] = useState<any[]>([]);
-  const [projectName, setProjectName] = useState<string>('');
+  const [projectName, setProjectName] = useState<string>(() => {
+    if (!id) return '';
+    return localStorage.getItem(`swacn_name_${id}`) || '';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [allowFsDownload, setAllowFsDownload] = useState<boolean>(true);
   const [hasBaseline, setHasBaseline] = useState<boolean>(false);
+  const [embedTheme, setEmbedTheme] = useState<'light' | 'dark'>(() => {
+    if (!id) return 'dark';
+    const cached = localStorage.getItem(`swacn_embed_theme_${id}`);
+    return (cached as 'light' | 'dark') || 'dark';
+  });
 
 
 
@@ -100,18 +112,39 @@ export function Lab() {
     setIsSidebarOpen(false);
 
     if (id) {
+      // 1. OPTIMISTIC SYNC FROM CACHED PROJECTS LIST (Removes UI Flash)
+      const cached = projects.find(p => p.id === id);
+      if (cached) {
+        if (TERMINAL_THEMES[cached.theme as Theme]) setTheme(cached.theme as Theme);
+        setEmbedTheme((cached.embed_theme as 'light' | 'dark') || 'dark');
+        setShowKeystrokes(cached.show_keystrokes);
+        setAllowFsDownload(cached.allow_fs_download ?? true);
+        setHasBaseline(cached.has_baseline ?? false);
+        setHasRecording(cached.has_recording);
+        setIsSandboxMode(!cached.has_recording);
+        setProjectName(cached.name || '');
+      }
+
+      // 2. FETCH SOURCE OF TRUTH
       fetchCastDetails(id).then(details => {
-        if (TERMINAL_THEMES[details.theme as Theme]) {
-          setTheme(details.theme as Theme);
-        } else {
-          setTheme('swacn-dark');
-        }
+        const freshTheme = (details.theme as Theme) || 'swacn-dark';
+        const freshEmbedTheme = (details.embed_theme as 'light' | 'dark') || 'dark';
+        const freshName = details.name || '';
+
+        if (TERMINAL_THEMES[freshTheme]) setTheme(freshTheme);
+        setEmbedTheme(freshEmbedTheme);
+        setProjectName(freshName);
+        
+        // Update local cache
+        localStorage.setItem(`swacn_theme_${id}`, freshTheme);
+        localStorage.setItem(`swacn_embed_theme_${id}`, freshEmbedTheme);
+        localStorage.setItem(`swacn_name_${id}`, freshName);
+
         setShowKeystrokes(details.show_keystrokes);
         setAllowFsDownload(details.allow_fs_download ?? true);
         setHasBaseline(details.has_baseline ?? false);
         setHasRecording(details.has_recording);
         setIsSandboxMode(!details.has_recording);
-        if (details.name) setProjectName(details.name);
       }).catch(err => {
         console.error("Failed to fetch cast details", err);
         setHasRecording(true);
@@ -123,10 +156,12 @@ export function Lab() {
       setShowKeystrokes(false);
       setAllowFsDownload(false);
       setHasBaseline(false);
+      setEmbedTheme('dark');
       setHasRecording(false);
       setIsSandboxMode(true);
+      setProjectName('');
     }
-  }, [id]);
+  }, [id, projects]);
 
   const isOwner = !id || projects.some(p => p.id === id);
 
@@ -140,21 +175,28 @@ export function Lab() {
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
     if (id && isOwner) {
-      updateCastSettings(id, { theme: newTheme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload }).catch(console.error);
+      updateCastSettings(id, { theme: newTheme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload, embed_theme: embedTheme }).catch(console.error);
     }
   };
 
   const handleKeystrokesChange = (show: boolean) => {
     setShowKeystrokes(show);
     if (id && isOwner) {
-      updateCastSettings(id, { theme, show_keystrokes: show, allow_fs_download: allowFsDownload }).catch(console.error);
+      updateCastSettings(id, { theme, show_keystrokes: show, allow_fs_download: allowFsDownload, embed_theme: embedTheme }).catch(console.error);
     }
   };
 
   const handleFsDownloadChange = (allow: boolean) => {
     setAllowFsDownload(allow);
     if (id && isOwner) {
-      updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allow }).catch(console.error);
+      updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allow, embed_theme: embedTheme }).catch(console.error);
+    }
+  };
+
+  const handleEmbedThemeChange = (newEmbedTheme: 'light' | 'dark') => {
+    setEmbedTheme(newEmbedTheme);
+    if (id && isOwner) {
+      updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload, embed_theme: newEmbedTheme }).catch(console.error);
     }
   };
 
@@ -451,7 +493,11 @@ export function Lab() {
     return (
       <button 
         onClick={handleDownloadFs}
-        className={`bg-transparent border-2 ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer`}
+        className={`${isEmbedSizing ? 'border' : 'border-2'} ${isEmbedSizing ? 'px-2 py-1 text-[10px]' : 'px-4 py-2 text-xs'} font-headline font-bold uppercase transition-all flex items-center gap-1.5 
+          ${embedTheme === 'dark' 
+            ? `bg-transparent text-[#fcf9f0] ${embedTheme === 'dark' ? 'border-[#fcf9f0]/30' : 'border-[#fcf9f0]'} hover:bg-[#fcf9f0] hover:text-[#1c1c17] ${isEmbedSizing ? 'hard-shadow-sm-light' : 'hard-shadow-light'}` 
+            : `bg-transparent text-black border-black/30 hover:bg-black hover:text-white ${isEmbedSizing ? 'hard-shadow-sm' : 'hard-shadow'}`}
+          hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer`}
         title="Download filesystem"
       >
         <Download size={isEmbedSizing ? 12 : 16} /> FS
@@ -464,7 +510,11 @@ export function Lab() {
       return (
         <button 
           onClick={handleReturnToPlayback} 
-          className={`bg-transparent border-2 ${isEmbedSizing ? 'px-4 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all hard-shadow flex items-center gap-1.5 text-black border-black/30 hover:bg-black hover:text-white hover:-translate-y-0.5 hover:-translate-x-0.5`}
+          className={`${isEmbedSizing ? 'border' : 'border-2'} ${isEmbedSizing ? 'px-4 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} font-mono font-bold uppercase transition-all flex items-center gap-1.5 
+            ${embedTheme === 'dark' 
+              ? `bg-transparent text-[#fcf9f0] border-[#fcf9f0]/30 hover:bg-[#fcf9f0] hover:text-[#1c1c17] ${isEmbedSizing ? 'hard-shadow-sm-light' : 'hard-shadow-light'}` 
+              : `bg-transparent text-black border-black/30 hover:bg-black hover:text-white ${isEmbedSizing ? 'hard-shadow-sm' : 'hard-shadow'}`}
+            hover:-translate-y-0.5 hover:-translate-x-0.5`}
         >
           <XCircle size={isEmbedSizing ? 12 : 16} /> Exit Sandbox
         </button>
@@ -477,11 +527,15 @@ export function Lab() {
           <button 
             onClick={vmStatus === 'ready' ? handleTryNow : undefined}
             disabled={vmStatus !== 'ready' && !isEmbed}
-            className={`relative overflow-hidden border-on-surface font-mono font-bold uppercase transition-all flex items-center justify-center gap-2 hard-shadow
-              ${isEmbedSizing ? 'border-2 px-4 py-1.5 text-[10px]' : 'border-2 px-6 py-2.5 text-xs'}
+            className={`relative overflow-hidden font-mono font-bold uppercase transition-all flex items-center justify-center gap-2 
+              ${vmStatus === 'ready' ? (embedTheme === 'dark' ? 'border-[#402208]' : 'border-on-surface') : (embedTheme === 'dark' ? 'border-[#fcf9f0]/10' : 'border-on-surface')}
+              ${embedTheme === 'dark' ? (isEmbedSizing ? 'hard-shadow-sm-light' : 'hard-shadow-light') : (isEmbedSizing ? 'hard-shadow-sm' : 'hard-shadow')}
+              ${isEmbedSizing ? 'border px-3 py-1.5 text-[9px]' : 'border-2 px-6 py-2.5 text-xs'}
               ${vmStatus === 'ready' 
                 ? 'bg-primary text-white hover:-translate-y-0.5 hover:-translate-x-0.5 cursor-pointer' 
-                : (isEmbed ? 'w-full bg-surface-container-high text-on-surface/60 cursor-default group-hover:opacity-0' : 'w-full bg-surface-container-high text-on-surface/60 cursor-not-allowed')}`}
+                : (isEmbed 
+                    ? `w-full ${embedTheme === 'dark' ? 'bg-[#2a2a24] text-[#fcf9f0]/40' : 'bg-surface-container-high text-on-surface/60'} cursor-default group-hover:opacity-0` 
+                    : `w-full ${embedTheme === 'dark' ? 'bg-[#2a2a24] text-[#fcf9f0]/40' : 'bg-surface-container-high text-on-surface/60'} cursor-not-allowed`)}`}
           >
             {/* Progress Fill Layer */}
             <div 
@@ -506,7 +560,9 @@ export function Lab() {
               href={`/lab/${id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className={`absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white border-on-surface flex items-center justify-center gap-1.5 font-mono font-bold uppercase transition-all duration-300 hard-shadow z-20 whitespace-nowrap hover:-translate-y-0.5 hover:-translate-x-0.5 ${isEmbedSizing ? 'border-2 text-[10px]' : 'border-2 text-xs'}`}
+              className={`absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto bg-primary text-white flex items-center justify-center gap-1.5 font-mono font-bold uppercase transition-all duration-300 z-20 whitespace-nowrap hover:-translate-y-0.5 hover:-translate-x-0.5 
+                ${embedTheme === 'dark' ? `border-[#402208] ${isEmbedSizing ? 'hard-shadow-sm-light' : 'hard-shadow-light'}` : `border-on-surface ${isEmbedSizing ? 'hard-shadow-sm' : 'hard-shadow'}`}
+                ${isEmbedSizing ? 'border text-[10px]' : 'border-2 text-xs'}`}
             >
               Open in SWACN <ExternalLink size={isEmbedSizing ? 12 : 16} />
             </a>
@@ -652,7 +708,7 @@ export function Lab() {
             <div className={`absolute inset-0 p-6 overflow-y-auto transition-all duration-300 ease-in-out ${activeTab === 'settings' ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 translate-x-2 pointer-events-none -z-10'}`}>
               <div className="space-y-10">
                 <div>
-                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Palette size={20}/> Embed Theme</h2>
+                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Palette size={20}/> Terminal Theme</h2>
                   <div className="space-y-3 font-mono text-sm capitalize">
                     {(Object.keys(TERMINAL_THEMES) as Theme[]).map(t => (
                       <label key={t} className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors">
@@ -664,6 +720,24 @@ export function Lab() {
                           className="accent-primary w-4 h-4"
                         />
                         <span className="font-bold">{t}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Palette size={20}/> UI Theme</h2>
+                  <div className="space-y-3 font-mono text-sm capitalize">
+                    {(['light', 'dark'] as const).map(t => (
+                      <label key={t} className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors">
+                        <input 
+                          type="radio" 
+                          name="embedTheme" 
+                          checked={embedTheme === t} 
+                          onChange={() => handleEmbedThemeChange(t)}
+                          className="accent-primary w-4 h-4"
+                        />
+                        <span className="font-bold">{t} Mode</span>
                       </label>
                     ))}
                   </div>
@@ -707,7 +781,7 @@ export function Lab() {
         <section className="flex-grow flex flex-col relative overflow-hidden bg-transparent">
           
           {!isEmbed && (
-          <div className="px-4 py-3 border-b-4 border-on-surface bg-surface-container-high flex justify-between items-center z-10 h-16 shrink-0 relative">
+          <div className={`px-4 py-3 border-b-4 flex justify-between items-center z-10 h-16 shrink-0 relative transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20 text-[#fcf9f0]' : 'bg-surface-container-high border-on-surface text-on-surface'}`}>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <button 
@@ -715,7 +789,7 @@ export function Lab() {
                     if (activeTab === 'projects' && isSidebarOpen) setIsSidebarOpen(false);
                     else { setActiveTab('projects'); setIsSidebarOpen(true); }
                   }}
-                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'projects' && isSidebarOpen ? 'bg-primary text-white border-on-surface hard-shadow' : 'hover:bg-white text-on-surface'}`}
+                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'projects' && isSidebarOpen ? (embedTheme === 'dark' ? 'bg-primary text-white border-[#fcf9f0]/40 hard-shadow-light' : 'bg-primary text-white border-on-surface hard-shadow') : (embedTheme === 'dark' ? 'hover:bg-[#fcf9f0]/10 text-[#fcf9f0] hover:hard-shadow-light' : 'hover:bg-white text-on-surface hover:hard-shadow')}`}
                   title="Workspaces"
                 >
                   <ListVideo size={20} />
@@ -725,13 +799,13 @@ export function Lab() {
                     if (activeTab === 'settings' && isSidebarOpen) setIsSidebarOpen(false);
                     else { setActiveTab('settings'); setIsSidebarOpen(true); }
                   }}
-                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'settings' && isSidebarOpen ? 'bg-primary text-white border-on-surface hard-shadow' : 'hover:bg-white text-on-surface'}`}
+                  className={`p-2 border-2 border-transparent transition-all ${activeTab === 'settings' && isSidebarOpen ? (embedTheme === 'dark' ? 'bg-primary text-white border-[#fcf9f0]/40 hard-shadow-light' : 'bg-primary text-white border-on-surface hard-shadow') : (embedTheme === 'dark' ? 'hover:bg-[#fcf9f0]/10 text-[#fcf9f0] hover:hard-shadow-light' : 'hover:bg-white text-on-surface hover:hard-shadow')}`}
                   title="Settings"
                 >
                   <Settings size={20} />
                 </button>
               </div>
-              <div className="w-px h-8 bg-on-surface opacity-30"></div>
+              <div className={`w-px h-8 opacity-30 ${embedTheme === 'dark' ? 'bg-[#fcf9f0]' : 'bg-on-surface'}`}></div>
               <span className="font-mono text-sm md:text-base font-bold uppercase tracking-tighter truncate max-w-[200px] sm:max-w-none">
               {id 
                 ? (projectName || projects.find(p => p.id === id)?.name || id.split('-')[0])
@@ -749,13 +823,13 @@ export function Lab() {
           
           {/* Embed macOS-style Title Bar */}
           {isEmbed && (
-            <div className="h-14 bg-surface-container-high border-b-4 border-on-surface flex items-center justify-between px-4 shrink-0 relative z-10">
+            <div className={`h-14 border-b-4 flex items-center justify-between px-4 shrink-0 relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20' : 'bg-surface-container-high border-on-surface'}`}>
               <div className="flex gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-on-surface"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-on-surface"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-on-surface"></div>
+                <div className={`w-3 h-3 rounded-full bg-red-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
+                <div className={`w-3 h-3 rounded-full bg-yellow-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
+                <div className={`w-3 h-3 rounded-full bg-green-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
               </div>
-              <div className="absolute left-1/2 -translate-x-1/2 font-mono text-xs font-bold tracking-widest uppercase text-on-surface">
+              <div className={`absolute left-1/2 -translate-x-1/2 font-mono text-xs font-bold tracking-widest uppercase ${embedTheme === 'dark' ? 'text-[#fcf9f0]' : 'text-on-surface'}`}>
                 {projectName || id?.split('-')[0]}
               </div>
               
@@ -819,12 +893,12 @@ export function Lab() {
             {/* Context Menu */}
             {contextMenu && (
               <div 
-                className="fixed z-[1000] bg-background border-4 border-on-surface p-2 hard-shadow font-mono text-sm"
+                className={`fixed z-[1000] border-4 p-2 font-mono text-sm ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/40 text-[#fcf9f0] hard-shadow-light' : 'bg-background border-on-surface text-on-surface hard-shadow'}`}
                 style={{ left: contextMenu.x, top: contextMenu.y }}
               >
                 <button 
                   onClick={copyEmbedCode}
-                  className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high'}`}
+                  className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
                 >
                   {copiedEmbed ? <Check size={16} /> : <Share2 size={16} />} 
                   {copiedEmbed ? 'Copied!' : 'Copy embed code'}
@@ -835,16 +909,16 @@ export function Lab() {
 
           {/* Elegant Embed Footer */}
           {isEmbed && (
-            <div className="h-12 bg-background border-t-4 border-on-surface flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest text-on-surface/70 relative z-10">
-              <div className="flex items-center gap-4">
-                 {isSandboxMode 
-                   ? <span className="flex items-center gap-2 text-primary"><SquareTerminal size={14}/> Live Interactive Sandbox</span> 
-                   : (isPlaying 
-                      ? <span className="flex items-center gap-2"><Play size={14}/> Playing Cast</span> 
-                      : <span className="flex items-center gap-2"><Pause size={14}/> Paused</span>
-                     )
-                 }
-              </div>
+            <div className={`h-12 border-t-4 flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20 text-[#fcf9f0]' : 'bg-background border-on-surface text-on-surface/70'}`}>
+               <div className="flex items-center gap-4">
+                  {isSandboxMode 
+                    ? <span className="flex items-center gap-2 text-primary"><SquareTerminal size={14}/> Live Interactive Sandbox</span> 
+                    : (isPlaying 
+                       ? <span className="flex items-center gap-2"><Play size={14}/> Playing Cast</span> 
+                       : <span className="flex items-center gap-2"><Pause size={14}/> Paused</span>
+                      )
+                  }
+               </div>
               
               <a 
                 href={`/lab/${id}`} 
