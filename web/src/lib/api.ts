@@ -1,6 +1,18 @@
-export const getAuthToken = () => localStorage.getItem('swacn_token');
-export const setAuthToken = (token: string) => localStorage.setItem('swacn_token', token);
-export const logout = () => localStorage.removeItem('swacn_token');
+let memoryToken: string | null = null;
+
+export const getAuthToken = () => memoryToken || localStorage.getItem('swacn_token');
+export const setAuthToken = (token: string) => {
+  memoryToken = token;
+  try {
+    localStorage.setItem('swacn_token', token);
+  } catch (e) {
+    // Silently fail if localStorage is blocked (common in iframes)
+  }
+};
+export const logout = () => {
+  memoryToken = null;
+  localStorage.removeItem('swacn_token');
+};
 
 export async function fetchCasts() {
   const token = getAuthToken();

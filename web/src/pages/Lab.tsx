@@ -7,7 +7,7 @@ import * as AsciinemaPlayer from 'asciinema-player';
 import 'asciinema-player/dist/bundle/asciinema-player.css';
 import '@xterm/xterm/css/xterm.css';
 
-import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken } from '../lib/api';
+import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken, setAuthToken } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 import { V86VM, VMStatus } from '../lib/V86VM';
 
@@ -95,15 +95,34 @@ export function Lab() {
   const recordingUrl = id ? `/uploads/${id}/recording.cast` : null;
 
   useEffect(() => {
-    fetchCasts().then(setProjects).catch(console.error);
+    const refreshProjects = () => {
+      fetchCasts().then(setProjects).catch(err => {
+        if (!isEmbed) console.error("Failed to fetch casts", err);
+      });
+    };
+
+    refreshProjects();
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SWACN_AUTH' && event.data.token) {
+        console.log("[Lab] Auth token received via Bridge");
+        setAuthToken(event.data.token);
+        refreshProjects();
+      }
+    };
 
     const handleProjectCreated = () => {
-      fetchCasts().then(setProjects).catch(console.error);
+      refreshProjects();
       setIsSidebarOpen(false);
     };
+
+    window.addEventListener('message', handleMessage);
     window.addEventListener('project-created', handleProjectCreated);
-    return () => window.removeEventListener('project-created', handleProjectCreated);
-  }, []);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('project-created', handleProjectCreated);
+    };
+  }, [isEmbed]);
 
   useEffect(() => {
     // Reset project-specific states immediately on ID change
@@ -481,7 +500,14 @@ export function Lab() {
 
   const handleDownloadFs = () => {
     if (baselineUrl && hasBaseline) {
-      window.open(baselineUrl, '_blank');
+      // Create a hidden anchor and trigger click for better iframe compatibility
+      const link = document.createElement('a');
+      link.href = baselineUrl;
+      link.setAttribute('download', 'baseline.tar.gz');
+      link.setAttribute('target', '_blank');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
