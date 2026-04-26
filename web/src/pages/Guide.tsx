@@ -254,7 +254,7 @@ export function Guide() {
       {
         "name": "yq",
         "url": "https://.../yq_linux_386",
-        "install_path": "/usr/bin/yq"
+        "install_path": "/usr/bin"
       }
     ]
   }

@@ -78,15 +78,54 @@ export class V86VM {
     });
   }
 
-  // Uses the backend proxy to fetch arbitrary tools without CORS
-  private async fetchViaProxy(url: string): Promise<Uint8Array> {
-    const proxyUrl = `/dev-proxy?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl);
-    if (!res.ok) {
-      throw new Error(`Proxy fetch failed: ${res.status}`);
+  // Uses the browser Cache API and backend proxy to fetch assets efficiently
+  private async fetchWithCache(url: string, useProxy: boolean = true): Promise<Uint8Array> {
+    const cacheName = 'swacn-assets-v1';
+    
+    // 1. Try to get from Cache API first
+    try {
+      if ('caches' in window) {
+        const cache = await caches.open(cacheName);
+        const cachedResponse = await cache.match(url);
+        if (cachedResponse) {
+          console.log(`[V86VM] Cache hit: ${url}`);
+          const buffer = await cachedResponse.arrayBuffer();
+          return new Uint8Array(buffer);
+        }
+      }
+    } catch (e) {
+      console.warn("[V86VM] Cache lookup failed:", e);
     }
+
+    console.log(`[V86VM] Cache miss: ${url}`);
+    
+    // 2. Fetch from network
+    const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
+    const res = await fetch(fetchUrl);
+    if (!res.ok) {
+      throw new Error(`Fetch failed: ${res.status} for ${url}`);
+    }
+    
     const buffer = await res.arrayBuffer();
-    return new Uint8Array(buffer);
+    const data = new Uint8Array(buffer);
+
+    // 3. Store in cache for next time
+    try {
+      if ('caches' in window) {
+        const cache = await caches.open(cacheName);
+        // We create a fresh response to store in cache
+        await cache.put(url, new Response(buffer, {
+          headers: {
+            'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
+            'Content-Length': buffer.byteLength.toString()
+          }
+        }));
+      }
+    } catch (e) {
+      console.warn("[V86VM] Failed to store in cache:", e);
+    }
+
+    return data;
   }
 
   public async boot(
@@ -104,6 +143,9 @@ export class V86VM {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     onStatus('initializing');
+    
+    console.log("[V86VM] Booting with manifest:", manifestUrl);
+    console.log("[V86VM] Cache API available:", ('caches' in window));
 
     try {
       onStatus('booting_kernel');
@@ -159,10 +201,9 @@ export class V86VM {
 
         if (manifest.baseline && baselineUrl) {
           onStatus('downloading_baseline');
-          // No need for proxy for baseline, it's hosted on our own server
-          const baselineRes = await fetch(baselineUrl);
-          if (baselineRes.ok) {
-            const baselineData = new Uint8Array(await baselineRes.arrayBuffer());
+          try {
+            // Baseline is cached using our new helper
+            const baselineData = await this.fetchWithCache(baselineUrl, false);
             
             onStatus('extracting_baseline');
             // Inject directly into the v86 9p share (mounted at /mnt/ inside the VM)
@@ -172,6 +213,8 @@ export class V86VM {
             const tarOut = await this.execWait(`zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn`);
             console.log("[V86VM] tar output:", tarOut);
             await this.execWait(`rm /mnt/baseline.tar.gz`);
+          } catch (err) {
+            console.error("Failed to download baseline", err);
           }
         }
 
@@ -179,26 +222,43 @@ export class V86VM {
         const binariesList = manifest.binaries?.x86_32 ?? manifest.environment?.binaries?.x86_32 ??
                              manifest.binaries?.i386 ?? manifest.environment?.binaries?.i386 ?? 
                              manifest.binaries?.x86_64 ?? manifest.environment?.binaries?.x86_64 ?? [];
+        
         if (binariesList.length > 0) {
-          for (const tool of binariesList) {
-            onStatus('downloading_tools');
-            try {
-              // Use proxy to avoid CORS issues for external tools like Github Releases
-              const toolData = await this.fetchViaProxy(tool.url);
-              
-              onStatus('installing_tools');
+          onStatus('downloading_tools');
+          try {
+            // OPTIMIZATION: Download all tools in parallel
+            const downloadPromises = binariesList.map(async (tool: any) => {
+              const data = await this.fetchWithCache(tool.url);
+              return { tool, data };
+            });
+            
+            const results = await Promise.all(downloadPromises);
+            
+            onStatus('installing_tools');
+            // Installation must be sequential because it interacts with the VM serial port
+            for (const { tool, data } of results) {
               const filename = tool.url.split('/').pop() || 'tool';
-              // Inject into 9p share (/mnt/)
-              this.emulator?.create_file(filename, toolData);
               
-              await this.execWait(`mkdir -p ${tool.install_path.substring(0, tool.install_path.lastIndexOf('/'))}`);
-              const cpOut = await this.execWait(`cp /mnt/${filename} ${tool.install_path}`);
-              console.log(`[V86VM] cp ${filename} output:`, cpOut);
-              await this.execWait(`chmod +x ${tool.install_path}`);
+              // Smart path resolution:
+              // 1. If no path, use /usr/bin/name
+              // 2. If path is a directory (doesn't end with name), append name
+              // 3. If path is a full file path (ends with name), use as is
+              let installPath = tool.install_path || '/usr/bin';
+              if (!installPath.endsWith(tool.name)) {
+                installPath = installPath.endsWith('/') ? `${installPath}${tool.name}` : `${installPath}/${tool.name}`;
+              }
+
+              console.log(`[V86VM] Installing ${tool.name} to ${installPath}`);
+              this.emulator?.create_file(filename, data);
+              
+              await this.execWait(`mkdir -p ${installPath.substring(0, installPath.lastIndexOf('/'))}`);
+              const cpOut = await this.execWait(`cp /mnt/${filename} ${installPath}`);
+              if (cpOut) console.log(`[V86VM] cp ${filename} output:`, cpOut);
+              await this.execWait(`chmod +x ${installPath}`);
               await this.execWait(`rm /mnt/${filename}`);
-            } catch (err) {
-              console.error("Failed to download tool", tool.name, err);
             }
+          } catch (err) {
+            console.error("Failed to download or install tools", err);
           }
         }
       }

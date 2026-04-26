@@ -72,8 +72,7 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
             }
             manifest.environment.binaries.x86_32.push({
               name,
-              url,
-              install_path: `/usr/bin/${name}`
+              url
             });
           }
         });
