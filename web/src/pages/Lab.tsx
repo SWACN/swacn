@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download } from 'lucide-react';
+import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
@@ -43,6 +43,7 @@ export function Lab() {
   const isEmbed = searchParams.get('embed') === 'true';
   
   const [activeTab, setActiveTab] = useState<Tab>('projects');
+  const [token, setToken] = useState<string | null>(getAuthToken());
   const [theme, setTheme] = useState<Theme>(() => {
     if (!id) return 'swacn-dark';
     const cached = localStorage.getItem(`swacn_theme_${id}`);
@@ -94,19 +95,31 @@ export function Lab() {
   const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz` : null;
   const recordingUrl = id ? `/uploads/${id}/recording.cast` : null;
 
-  useEffect(() => {
-    const refreshProjects = () => {
-      fetchCasts().then(setProjects).catch(err => {
-        if (!isEmbed) console.error("Failed to fetch casts", err);
-      });
-    };
+  const refreshProjects = () => {
+    fetchCasts().then(setProjects).catch(err => {
+      if (!isEmbed) console.error("Failed to fetch casts", err);
+    });
+  };
 
+  useEffect(() => {
     refreshProjects();
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'SWACN_AUTH' && event.data.token) {
         console.log("[Lab] Auth token received via Bridge");
         setAuthToken(event.data.token);
+        setToken(event.data.token);
+        refreshProjects();
+      }
+    };
+
+    // Listen for BroadcastChannel messages (for popups)
+    const authChannel = new BroadcastChannel('swacn_auth');
+    authChannel.onmessage = (event) => {
+      if (event.data?.type === 'SWACN_AUTH' && event.data.token) {
+        console.log("[Lab] Auth token received via BroadcastChannel");
+        setAuthToken(event.data.token);
+        setToken(event.data.token);
         refreshProjects();
       }
     };
@@ -118,9 +131,17 @@ export function Lab() {
 
     window.addEventListener('message', handleMessage);
     window.addEventListener('project-created', handleProjectCreated);
+
+    // If we are in an embed and don't have a token, ask the parent for the auth token
+    if (isEmbed && !getAuthToken()) {
+      // One-shot request to parent
+      window.parent.postMessage({ type: 'SWACN_GET_AUTH' }, '*');
+    }
+
     return () => {
       window.removeEventListener('message', handleMessage);
       window.removeEventListener('project-created', handleProjectCreated);
+      authChannel.close();
     };
   }, [isEmbed]);
 
@@ -946,17 +967,72 @@ export function Lab() {
                   }
                </div>
               
-              <a 
-                href={`/lab/${id}`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-primary transition-colors group"
-              >
-                Open in SWACN 
-                <span className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
-                  <ExternalLink size={14} />
-                </span>
-              </a>
+              <div className="flex items-center gap-4">
+                {!token ? (
+                  <button 
+                    onClick={() => {
+                      const width = 600;
+                      const height = 700;
+                      const left = window.screen.width / 2 - width / 2;
+                      const top = window.screen.height / 2 - height / 2;
+                      
+                      // Generate a unique handshake ID for this session
+                      const handshakeId = Math.random().toString(36).substring(2, 15);
+                      
+                      // Start polling for the token
+                      const pollInterval = setInterval(async () => {
+                        try {
+                          const res = await fetch(`/api/auth/poll?handshake_id=${handshakeId}`);
+                          const data = await res.json();
+                          if (data.token) {
+                            clearInterval(pollInterval);
+                            console.log("[Lab] Auth token received via Polling Handshake");
+                            setAuthToken(data.token);
+                            setToken(data.token);
+                            refreshProjects();
+                          }
+                        } catch (e) {
+                          console.error("[Lab] Handshake polling failed", e);
+                        }
+                      }, 1000);
+
+                      // Stop polling after 5 minutes to avoid leaks
+                      setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+
+                      window.open(`/api/auth/github/login?popup=true&handshake_id=${handshakeId}`, 'swacn_auth', `width=${width},height=${height},left=${left},top=${top}`);
+                    }}
+                    className="flex items-center gap-1.5 text-primary hover:underline transition-all"
+                  >
+                    <LogOut size={12} className="rotate-180" /> Sign In
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setAuthToken('');
+                      setToken(null);
+                      refreshProjects();
+                    }}
+                    className="flex items-center gap-1.5 text-on-surface/50 hover:text-primary transition-all"
+                    title="Log Out"
+                  >
+                    <LogOut size={12} /> Log Out
+                  </button>
+                )}
+                
+                <div className="w-px h-3 bg-on-surface/10"></div>
+                
+                <a 
+                  href={`/lab/${id}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-primary transition-colors group"
+                >
+                  Open in SWACN 
+                  <span className="group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform">
+                    <ExternalLink size={14} />
+                  </span>
+                </a>
+              </div>
             </div>
           )}
 

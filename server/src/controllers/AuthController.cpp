@@ -2,6 +2,12 @@
 #include <drogon/HttpClient.h>
 #include <drogon/utils/Utilities.h>
 #include <uuid/uuid.h> // Requires libuuid
+#include <map>
+#include <chrono>
+#include <mutex>
+
+static std::map<std::string, std::string> g_handshake_tokens;
+static std::mutex g_handshake_mutex;
 
 std::string AuthController::generateApiKey() {
     return "swacn_" + drogon::utils::getUuid();
@@ -9,7 +15,18 @@ std::string AuthController::generateApiKey() {
 
 void AuthController::login(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     std::string client_id = getenv("GITHUB_CLIENT_ID");
-    std::string redirect_url = "https://github.com/login/oauth/authorize?client_id=" + client_id + "&scope=read:user";
+    std::string is_popup = req->getParameter("popup");
+    std::string handshake_id = req->getParameter("handshake_id");
+    
+    std::string state = "";
+    if (is_popup == "true") {
+        state = "popup";
+        if (!handshake_id.empty()) {
+            state += ":" + handshake_id;
+        }
+    }
+    
+    std::string redirect_url = "https://github.com/login/oauth/authorize?client_id=" + client_id + "&scope=read:user&state=" + state;
     
     auto resp = drogon::HttpResponse::newRedirectionResponse(redirect_url);
     callback(resp);
@@ -73,7 +90,7 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
     token_req->setParameter("code", code);
     token_req->addHeader("Accept", "application/json");
 
-    client->sendRequest(token_req, [this, callback](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
+    client->sendRequest(token_req, [this, callback, req](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
         if (result != drogon::ReqResult::Ok || !response->getJsonObject()) {
             auto resp = drogon::HttpResponse::newHttpResponse();
             resp->setStatusCode(drogon::k500InternalServerError);
@@ -92,7 +109,7 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
         user_req->addHeader("Authorization", "Bearer " + access_token);
         user_req->addHeader("User-Agent", "SWACN-Server"); // GitHub requires a User-Agent
 
-        api_client->sendRequest(user_req, [this, callback](drogon::ReqResult res, const drogon::HttpResponsePtr& user_resp) {
+        api_client->sendRequest(user_req, [this, callback, req](drogon::ReqResult res, const drogon::HttpResponsePtr& user_resp) {
             if (res != drogon::ReqResult::Ok || !user_resp->getJsonObject()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k500InternalServerError);
@@ -110,11 +127,24 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
             dbClient->execSqlAsync(
                 "INSERT INTO users (github_id, username, api_key) VALUES ($1, $2, $3) "
                 "ON CONFLICT (github_id) DO UPDATE SET username = EXCLUDED.username RETURNING api_key",
-                [callback](const drogon::orm::Result& r) {
+                [callback, req](const drogon::orm::Result& r) {
                     std::string active_key = r[0]["api_key"].as<std::string>();
+                    auto state = req->getParameter("state");
+                    
+                    std::string popup_param = "";
+                    if (state.find("popup") == 0) {
+                        popup_param = "&popup=true";
+                        
+                        // If there is a handshake ID, register the token
+                        if (state.find(":") != std::string::npos) {
+                            std::string handshake_id = state.substr(state.find(":") + 1);
+                            std::lock_guard<std::mutex> lock(g_handshake_mutex);
+                            g_handshake_tokens[handshake_id] = active_key;
+                        }
+                    }
                     
                     std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
-                    auto resp = drogon::HttpResponse::newRedirectionResponse(frontend_url + "/auth-callback?token=" + active_key);
+                    auto resp = drogon::HttpResponse::newRedirectionResponse(frontend_url + "/auth-callback?token=" + active_key + popup_param);
                     callback(resp);
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {
@@ -127,4 +157,30 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
             );
         });
     });
+}
+
+void AuthController::pollHandshake(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    auto handshake_id = req->getParameter("handshake_id");
+    if (handshake_id.empty()) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k400BadRequest);
+        callback(resp);
+        return;
+    }
+
+    std::string token = "";
+    {
+        std::lock_guard<std::mutex> lock(g_handshake_mutex);
+        if (g_handshake_tokens.count(handshake_id)) {
+            token = g_handshake_tokens[handshake_id];
+            g_handshake_tokens.erase(handshake_id); // Only one-time use
+        }
+    }
+
+    Json::Value ret;
+    ret["token"] = token;
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(ret);
+    // Allow CORS for polling from any origin during development/testing if needed
+    // But since it's /api/auth/poll on the same domain as the iframe, it should be fine.
+    callback(resp);
 }

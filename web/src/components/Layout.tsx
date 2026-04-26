@@ -18,13 +18,70 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location.pathname]);
 
   // Sync token state on mount
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     setToken(getAuthToken());
 
     const handleOpenModal = () => setIsCreateModalOpen(true);
     window.addEventListener('open-project-creator', handleOpenModal);
-    return () => window.removeEventListener('open-project-creator', handleOpenModal);
+
+    // Auth Bridge: Listen for requests from embedded iframes
+    const handleAuthRequest = (event: MessageEvent) => {
+      // Security: Only respond if the event type is correct
+      if (event.data?.type === 'SWACN_GET_AUTH') {
+        console.log("[Layout] Auth request received from:", event.origin);
+        const currentToken = getAuthToken();
+        if (currentToken) {
+          console.log("[Layout] Sending auth token to iframe...");
+          // Handle 'null' origin (common in file://) by using '*' as target
+          const targetOrigin = event.origin === 'null' ? '*' : event.origin;
+          (event.source as WindowProxy)?.postMessage({ 
+            type: 'SWACN_AUTH', 
+            token: currentToken 
+          }, targetOrigin);
+        } else {
+          console.log("[Layout] No auth token found to share.");
+        }
+      }
+    };
+
+    window.addEventListener('message', handleAuthRequest);
+
+    return () => {
+      window.removeEventListener('open-project-creator', handleOpenModal);
+      window.removeEventListener('message', handleAuthRequest);
+    };
   }, []);
+
+  // Broadcast token to iframes whenever it changes (e.g. after login)
+  useEffect(() => {
+    if (isEmbed || !token) return;
+
+    const broadcastToIframes = () => {
+      const iframes = document.querySelectorAll('iframe');
+      if (iframes.length === 0) return;
+
+      console.log(`[Layout] Broadcasting auth token to ${iframes.length} iframes...`);
+      iframes.forEach(iframe => {
+        try {
+          // Send to any iframe that might be a SWACN lab
+          // We use '*' because origin checks can fail in partitioned/file contexts
+          iframe.contentWindow?.postMessage({ 
+            type: 'SWACN_AUTH', 
+            token 
+          }, '*');
+        } catch (e) {
+          // Ignore cross-origin errors
+        }
+      });
+    };
+
+    // Initial broadcast
+    broadcastToIframes();
+
+    // Also broadcast after a short delay to catch iframes that are still loading
+    const timer = setTimeout(broadcastToIframes, 2000);
+    return () => clearTimeout(timer);
+  }, [token, isEmbed]);
 
   return (
     <div className={`min-h-screen flex flex-col selection:bg-primary selection:text-white ${isEmbed ? 'h-screen overflow-hidden' : ''}`}>
