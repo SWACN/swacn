@@ -253,7 +253,8 @@ export function Lab() {
     e.stopPropagation();
     if (!id) return;
     const url = `${window.location.origin}/lab/${id}?embed=true`;
-    const embedCode = `<iframe src="${url}" width="800" height="600" style="border: none; display: block;" frameborder="0" allowfullscreen></iframe>`;
+    // We use width: 100% and aspect-ratio for better responsiveness out of the box
+    const embedCode = `<iframe src="${url}" width="100%" height="500" style="border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;" frameborder="0" allowfullscreen></iframe>`;
     navigator.clipboard.writeText(embedCode);
     setCopiedEmbed(true);
     setTimeout(() => setContextMenu(null), 1000);
@@ -448,19 +449,26 @@ export function Lab() {
     let resizeTimeout: ReturnType<typeof setTimeout>;
     const resizeObserver = new ResizeObserver(() => {
       try {
-        fitAddon.fit();
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+        }
         
         // Debounce the VM stty commands to prevent serial port flooding
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-          vm.setTerminalSize(term.cols, term.rows);
+          if (xtermInstance.current && vm) {
+            vm.setTerminalSize(xtermInstance.current.cols, xtermInstance.current.rows);
+          }
         }, 300);
       } catch (err) {
         // Ignore fit errors if container is 0x0
       }
     });
 
-    resizeObserver.observe(terminalRef.current);
+    // Observe the parent container instead of just the terminal to ensure fit happens even when hidden
+    if (terminalRef.current?.parentElement) {
+      resizeObserver.observe(terminalRef.current.parentElement);
+    }
 
     return () => {
       resizeObserver.disconnect();
@@ -870,18 +878,20 @@ export function Lab() {
           
           {/* Embed macOS-style Title Bar */}
           {isEmbed && (
-            <div className={`h-14 border-b-4 flex items-center justify-between px-4 shrink-0 relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20' : 'bg-surface-container-high border-on-surface'}`}>
-              <div className="flex gap-2">
+            <div className={`h-14 border-b-4 grid grid-cols-[1fr_auto_1fr] items-center px-4 shrink-0 relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20' : 'bg-surface-container-high border-on-surface'}`}>
+              <div className="flex gap-2 items-center">
                 <div className={`w-3 h-3 rounded-full bg-red-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
                 <div className={`w-3 h-3 rounded-full bg-yellow-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
                 <div className={`w-3 h-3 rounded-full bg-green-500 border-2 ${embedTheme === 'dark' ? 'border-[#fcf9f0]/20' : 'border-on-surface'}`}></div>
               </div>
-              <div className={`absolute left-1/2 -translate-x-1/2 font-mono text-xs font-bold tracking-widest uppercase ${embedTheme === 'dark' ? 'text-[#fcf9f0]' : 'text-on-surface'}`}>
-                {projectName || id?.split('-')[0]}
+              
+              <div className="min-w-0 flex-grow px-2">
+                <div className={`font-mono text-[10px] sm:text-xs font-bold tracking-widest uppercase truncate max-w-[120px] sm:max-w-[300px] mx-auto text-center ${embedTheme === 'dark' ? 'text-[#fcf9f0]' : 'text-on-surface'}`}>
+                  {projectName || id?.split('-')[0]}
+                </div>
               </div>
               
-              {/* Embed Header Action Button */}
-              <div className="flex items-center gap-3 z-20">
+              <div className="flex items-center justify-end gap-3 z-20">
                 {renderDownloadButton(true)}
                 {renderActionButton(true)}
               </div>
@@ -900,11 +910,11 @@ export function Lab() {
           >
 
             {/* Unified Containers with maintained dimensions for silent terminal fitting */}
-            <div className={`absolute inset-0 p-4 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <div className={`absolute inset-0 p-2 sm:p-4 z-20 transition-opacity duration-300 ${isSandboxMode ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
               <div ref={playerContainerRef} className="w-full h-full overflow-hidden flex items-center justify-center" />
             </div>
 
-            <div className={`absolute inset-0 p-4 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className={`absolute inset-0 p-2 sm:p-4 z-10 transition-opacity duration-300 ${isSandboxMode ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <div ref={terminalRef} className="w-full h-full" />
             </div>
 
