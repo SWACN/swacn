@@ -3,7 +3,6 @@
 #include <drogon/utils/Utilities.h>
 #include <uuid/uuid.h> // Requires libuuid
 #include <map>
-#include <chrono>
 #include <mutex>
 
 static std::map<std::string, std::string> g_handshake_tokens;
