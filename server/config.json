@@ -23,7 +23,7 @@
       "port": 5432,
       "dbname": "swacn_db",
       "user": "postgres",
-      "password": "yourpassword",
+      "password": "postgres",
       "connection_number": 5
     }
   ]

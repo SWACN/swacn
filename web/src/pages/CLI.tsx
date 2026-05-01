@@ -39,7 +39,7 @@ export function CLI() {
 
   const handleGetCLI = () => {
     if (!token) {
-      window.location.href = '/api/auth/github/login';
+      window.dispatchEvent(new CustomEvent('open-login-modal'));
     } else {
       setShowModal(true);
     }

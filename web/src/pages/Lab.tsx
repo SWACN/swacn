@@ -730,7 +730,7 @@ export function Lab() {
                     if (getAuthToken()) {
                       window.dispatchEvent(new CustomEvent('open-project-creator'));
                     } else {
-                      window.location.href = '/api/auth/github/login';
+                      window.dispatchEvent(new CustomEvent('open-login-modal'));
                     }
                   }}
                   className="p-4 border-2 border-dashed border-on-surface cursor-pointer font-mono text-sm flex items-center justify-center gap-3 transition-colors bg-surface-container-high hover:bg-white text-on-surface/60 hover:text-on-surface mb-4 group"

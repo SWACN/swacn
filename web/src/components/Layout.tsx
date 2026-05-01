@@ -4,10 +4,12 @@ import { cn } from '../lib/utils';
 import { getAuthToken, logout } from '../lib/api';
 import { Copy, Check, Terminal, X, LogOut } from 'lucide-react';
 import { ProjectCreatorModal } from './ProjectCreatorModal';
+import { LoginModal } from './LoginModal';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const isEmbed = searchParams.get('embed') === 'true';
@@ -23,6 +25,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
     const handleOpenModal = () => setIsCreateModalOpen(true);
     window.addEventListener('open-project-creator', handleOpenModal);
+    const handleOpenLoginModal = () => setIsLoginModalOpen(true);
+    window.addEventListener('open-login-modal', handleOpenLoginModal);
 
     // Auth Bridge: Listen for requests from embedded iframes
     const handleAuthRequest = (event: MessageEvent) => {
@@ -48,6 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
     return () => {
       window.removeEventListener('open-project-creator', handleOpenModal);
+      window.removeEventListener('open-login-modal', handleOpenLoginModal);
       window.removeEventListener('message', handleAuthRequest);
     };
   }, []);
@@ -112,7 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   if (token) {
                     setIsCreateModalOpen(true);
                   } else {
-                    window.location.href = '/api/auth/github/login';
+                    setIsLoginModalOpen(true);
                   }
                 }}
                 className={cn(
@@ -155,6 +160,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       <ProjectCreatorModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </div>
   );
 }

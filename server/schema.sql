@@ -1,9 +1,10 @@
 -- schema.sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    github_id VARCHAR(255) UNIQUE NOT NULL,
+    github_id VARCHAR(255) UNIQUE,
+    google_id VARCHAR(255) UNIQUE,
     username VARCHAR(255) NOT NULL,
-    email VARCHAR(255),
+    email VARCHAR(255) UNIQUE,
     api_key VARCHAR(64) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
