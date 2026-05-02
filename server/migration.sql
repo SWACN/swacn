@@ -1,4 +1,12 @@
--- schema.sql
+-- migration.sql
+-- This script drops existing tables and recreates them with the new schema
+
+-- Drop existing tables (in reverse order of dependencies)
+DROP TABLE IF EXISTS casts CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS enterprise_domains CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS enterprises CASCADE;
 
 -- 1. Enterprises table for seat management (Admins)
 CREATE TABLE enterprises (

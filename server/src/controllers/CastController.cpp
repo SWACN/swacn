@@ -111,13 +111,13 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                     }
 
                     // 4.5 Extract project name from manifest if possible
-                    std::string project_name = "";
+                    std::string title = "";
                     try {
                         std::ifstream manifest_file((cast_dir / "manifest.json").string());
                         Json::Value manifest_json;
                         manifest_file >> manifest_json;
                         if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
-                            project_name = manifest_json["environment"]["project"].asString();
+                            title = manifest_json["environment"]["project"].asString();
                         }
                     } catch (...) {
                         // Ignore parsing errors
@@ -125,7 +125,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 
                     // 5. Update Database utilizing NULLIF for the empty string fallback
                     dbClient->execSqlAsync(
-                        "INSERT INTO casts (user_id, project_name, manifest_url, baseline_url, recording_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)",
+                        "INSERT INTO casts (user_id, title, manifest_url, baseline_url, recording_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)",
                         [callback, cast_uuid](const drogon::orm::Result& res) {
                             
                             const char* env_url = getenv("APP_URL");
@@ -148,7 +148,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                             callback(resp);
                         },
                         user_id, 
-                        project_name,
+                        title,
                         cast_uuid + "/manifest.json", 
                         baseline_val, 
                         recording_val,
@@ -179,7 +179,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     std::string like_pattern = id + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT id, project_name, manifest_url, baseline_url, recording_url, theme, show_keystrokes, allow_fs_download, embed_theme, created_at "
+        "SELECT id, title, manifest_url, baseline_url, recording_url, theme, show_keystrokes, allow_fs_download, embed_theme, created_at "
         "FROM casts WHERE manifest_url LIKE $1 AND deleted_at IS NULL",
         [callback, id](const drogon::orm::Result& r) {
             if (r.empty()) {
@@ -192,7 +192,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
             auto const& row = r[0];
             Json::Value castObj;
             castObj["id"] = id;
-            castObj["name"] = row["project_name"].isNull() ? "" : row["project_name"].as<std::string>();
+            castObj["name"] = row["title"].isNull() ? "" : row["title"].as<std::string>();
             castObj["has_recording"] = !row["recording_url"].isNull();
             castObj["has_baseline"] = !row["baseline_url"].isNull();
             castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
@@ -281,7 +281,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
     auto dbClient = drogon::app().getDbClient();
     
     dbClient->execSqlAsync(
-        "SELECT c.id, c.project_name, c.manifest_url, c.baseline_url, c.recording_url, c.theme, c.show_keystrokes, c.allow_fs_download, c.embed_theme, c.created_at "
+        "SELECT c.id, c.title, c.manifest_url, c.baseline_url, c.recording_url, c.theme, c.show_keystrokes, c.allow_fs_download, c.embed_theme, c.created_at "
         "FROM casts c JOIN users u ON c.user_id = u.id "
         "WHERE u.api_key = $1 AND c.deleted_at IS NULL ORDER BY c.created_at DESC",
         [callback](const drogon::orm::Result& r) {
@@ -297,7 +297,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
                 std::string uuid = manifest_path.substr(0, manifest_path.find('/'));
                 
                 castObj["id"] = uuid;
-                castObj["name"] = row["project_name"].isNull() ? "" : row["project_name"].as<std::string>();
+                castObj["name"] = row["title"].isNull() ? "" : row["title"].as<std::string>();
                 castObj["url"] = base_url + "/view/" + uuid;
                 castObj["has_recording"] = !row["recording_url"].isNull();
                 castObj["has_baseline"] = !row["baseline_url"].isNull();
