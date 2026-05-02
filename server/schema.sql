@@ -38,6 +38,7 @@ CREATE TABLE users (
     
     -- Enterprise Relation
     enterprise_id INT REFERENCES enterprises(id) ON DELETE SET NULL,
+    enterprise_email VARCHAR(255) UNIQUE, -- Tracks the exact email used to claim the seat
     
     -- Quotas (for Learners)
     internet_quota_bytes BIGINT DEFAULT 0, -- e.g., 53687091200 for 50GB
