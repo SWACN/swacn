@@ -6,10 +6,11 @@ import { TarBuilder } from '../lib/TarBuilder';
 
 interface Props {
   isOpen: boolean;
+  editCastId?: string | null;
   onClose: () => void;
 }
 
-export function ProjectCreatorModal({ isOpen, onClose }: Props) {
+export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [createProjectName, setCreateProjectName] = useState('');
   const [createEnvVars, setCreateEnvVars] = useState('');
   const [createTools, setCreateTools] = useState('');
@@ -18,6 +19,28 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (isOpen && editCastId) {
+      fetch(`/uploads/${editCastId}/manifest.json`)
+        .then(res => res.json())
+        .then(data => {
+          setCreateProjectName(data.environment?.project || '');
+          const env = data.environment?.env || {};
+          setCreateEnvVars(Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n'));
+          const binaries = data.environment?.binaries?.x86_32 || [];
+          setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
+        })
+        .catch(err => console.error("Failed to fetch manifest for edit", err));
+    } else if (isOpen) {
+      setCreateProjectName('');
+      setCreateEnvVars('');
+      setCreateTools('');
+      setCreateFiles(null);
+      setCreateRecordingFile(null);
+      setUploadError(null);
+    }
+  }, [isOpen, editCastId]);
 
   if (!isOpen) return null;
 
@@ -35,9 +58,11 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
       const token = getAuthToken();
       if (!token) throw new Error("Not authenticated. Please authenticate your CLI or sign in.");
 
-      const casts = await fetchCasts();
-      if (casts.length >= 15) {
-        throw new Error("Project limit reached. You have 15 active projects.");
+      if (!editCastId) {
+        const casts = await fetchCasts();
+        if (casts.length >= 15) {
+          throw new Error("Project limit reached. You have 15 active projects.");
+        }
       }
 
       const manifest: any = {
@@ -122,14 +147,21 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
 
       formData.append('manifest', manifestBlob, 'manifest.json');
 
-      const res = await fetch('/api/v1/casts/upload', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
+      let castId = editCastId;
+      if (editCastId) {
+        const { updateCastUpload } = await import('../lib/api');
+        await updateCastUpload(editCastId, formData);
+      } else {
+        const res = await fetch('/api/v1/casts/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload failed");
+        castId = data.cast_id;
+      }
 
       setCreateProjectName('');
       setCreateEnvVars('');
@@ -138,7 +170,13 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
       setCreateRecordingFile(null);
       onClose();
       window.dispatchEvent(new CustomEvent('project-created'));
-      navigate(`/lab/${data.cast_id}`);
+      if (castId) {
+        if (editCastId) {
+          window.location.reload();
+        } else {
+          navigate(`/lab/${castId}`);
+        }
+      }
     } catch (err: any) {
       setUploadError(err.message);
     } finally {
@@ -152,7 +190,7 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
         <div className="bg-on-surface p-4 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2 text-background font-mono text-sm font-bold">
             <SquareTerminal size={18} />
-            <span>NEW_SWACN_PROJECT</span>
+            <span>{editCastId ? "EDIT_SWACN_PROJECT" : "NEW_SWACN_PROJECT"}</span>
           </div>
           <button onClick={onClose} className="text-background hover:text-primary">
             <XCircle size={24} />
@@ -160,7 +198,7 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
         </div>
 
         <div className="p-8 overflow-y-auto">
-          <h2 className="font-headline text-3xl font-black uppercase mb-4 tracking-tighter">Create Project</h2>
+          <h2 className="font-headline text-3xl font-black uppercase mb-4 tracking-tighter">{editCastId ? "Edit Project" : "Create Project"}</h2>
           
           {uploadError && (
             <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-3 mb-6 font-mono text-sm font-bold">
@@ -252,7 +290,7 @@ export function ProjectCreatorModal({ isOpen, onClose }: Props) {
                 disabled={isUploading}
                 className={`w-full border-4 border-on-surface px-8 py-4 text-xl font-bold transition-none hard-shadow flex items-center justify-center gap-4 ${isUploading ? 'bg-surface-container-high text-on-surface/50 cursor-not-allowed' : 'bg-primary text-white hover:translate-x-[4px] hover:translate-y-[4px]'}`}
               >
-                {isUploading ? 'Building Sandbox...' : 'Create Project'}
+                {isUploading ? 'Building Sandbox...' : (editCastId ? 'Update Project' : 'Create Project')}
               </button>
             </div>
           </form>

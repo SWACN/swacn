@@ -8,6 +8,7 @@ class CastController : public drogon::HttpController<CastController> {
         ADD_METHOD_TO(CastController::listCasts, "/v1/casts", drogon::Get); // NEW
         ADD_METHOD_TO(CastController::getCast, "/v1/casts/{id}", drogon::Get);
         ADD_METHOD_TO(CastController::updateCastSettings, "/v1/casts/{id}/settings", drogon::Patch);
+        ADD_METHOD_TO(CastController::updateCastUpload, "/v1/casts/{id}/upload", drogon::Post);
         ADD_METHOD_TO(CastController::deleteCast, "/v1/casts/{id}", drogon::Delete);
     METHOD_LIST_END
 
@@ -15,5 +16,6 @@ class CastController : public drogon::HttpController<CastController> {
     void uploadCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
     void getCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id);
     void updateCastSettings(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id);
+    void updateCastUpload(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id);
     void deleteCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id);
 };

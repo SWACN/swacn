@@ -63,3 +63,20 @@ export async function deleteCast(id: string) {
   if (!res.ok) throw new Error("Failed to delete cast");
   return res.json();
 }
+
+export async function updateCastUpload(id: string, formData: FormData) {
+  const token = getAuthToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`/api/v1/casts/${id}/upload`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData
+  });
+  
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to update project files");
+  return data;
+}

@@ -371,3 +371,148 @@ void CastController::deleteCast(const drogon::HttpRequestPtr& req, std::function
         like_pattern
     );
 }
+
+void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
+    std::string auth_header = req->getHeader("Authorization");
+    if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k401Unauthorized);
+        callback(resp);
+        return;
+    }
+    std::string api_key = auth_header.substr(7);
+
+    auto dbClient = drogon::app().getDbClient();
+    std::string like_pattern = id + "/%";
+    
+    // First verify ownership
+    dbClient->execSqlAsync(
+        "SELECT casts.id FROM casts JOIN users ON casts.user_id = users.id WHERE users.api_key = $1 AND casts.manifest_url LIKE $2 AND casts.deleted_at IS NULL",
+        [req, callback, dbClient, id, like_pattern](const drogon::orm::Result& r) {
+            if (r.empty()) {
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k403Forbidden);
+                callback(resp);
+                return;
+            }
+
+            // Parse Multipart
+            drogon::MultiPartParser fileUpload;
+            if (fileUpload.parse(req) != 0 || fileUpload.getFiles().empty()) {
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k400BadRequest);
+                resp->setBody("Incomplete upload assets. Requires at least a manifest.");
+                callback(resp);
+                return;
+            }
+
+            size_t total_size = 0;
+            for (auto const& file : fileUpload.getFiles()) {
+                total_size += file.fileLength();
+            }
+            if (total_size > 2 * 1024 * 1024) {
+                Json::Value err;
+                err["error"] = "Project size exceeds the 2 MB limit.";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(drogon::k413RequestEntityTooLarge);
+                callback(resp);
+                return;
+            }
+
+            // Setup Directory - Clear out old contents if needed
+            std::string upload_path_from_config = drogon::app().getUploadPath();
+            fs::path root_upload_path(upload_path_from_config);
+            fs::path cast_dir = root_upload_path / id;
+
+            try {
+                if (fs::exists(cast_dir)) {
+                    // We clear the directory to replace the files cleanly
+                    fs::remove_all(cast_dir);
+                }
+                fs::create_directories(cast_dir);
+            } catch (const std::exception& e) {
+                LOG_ERROR << "FS Error: " << e.what();
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            bool has_baseline = false;
+            bool has_recording = false;
+            for (auto& file : fileUpload.getFiles()) {
+                std::string itemName = file.getItemName(); 
+                std::string targetName;
+
+                if (itemName == "manifest") targetName = "manifest.json";
+                else if (itemName == "baseline") { targetName = "baseline.tar.gz"; has_baseline = true; }
+                else if (itemName == "recording") { targetName = "recording.cast"; has_recording = true; }
+                else targetName = file.getFileName(); 
+
+                std::string absolute_save_path = (cast_dir / targetName).string();
+                file.saveAs(absolute_save_path);
+            }
+
+            std::string baseline_val = has_baseline ? (id + "/baseline.tar.gz") : "";
+            std::string recording_val = has_recording ? (id + "/recording.cast") : "";
+
+            bool has_keystrokes = false;
+            if (has_recording) {
+                std::ifstream rec_file((cast_dir / "recording.cast").string());
+                std::string line;
+                while (std::getline(rec_file, line)) {
+                    if (line.find("\"i\"") != std::string::npos) {
+                        has_keystrokes = true;
+                        break;
+                    }
+                }
+            }
+
+            std::string title = "";
+            try {
+                std::ifstream manifest_file((cast_dir / "manifest.json").string());
+                Json::Value manifest_json;
+                manifest_file >> manifest_json;
+                if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
+                    title = manifest_json["environment"]["project"].asString();
+                }
+            } catch (...) { }
+
+            // Update Database
+            dbClient->execSqlAsync(
+                "UPDATE casts SET title = NULLIF($1, ''), baseline_url = NULLIF($2, ''), recording_url = NULLIF($3, ''), show_keystrokes = $4 WHERE manifest_url LIKE $5 RETURNING id",
+                [callback, id](const drogon::orm::Result& res) {
+                    const char* env_url = getenv("APP_URL");
+                    std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                    if (!base_url.empty() && base_url.back() == '/') {
+                        base_url.pop_back();
+                    }
+
+                    Json::Value ret;
+                    ret["status"] = "success";
+                    ret["cast_id"] = id;
+                    ret["url"] = base_url + "/view/" + id; 
+                    
+                    callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                },
+                [callback](const drogon::orm::DrogonDbException& e) {
+                    auto resp = drogon::HttpResponse::newHttpResponse();
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                },
+                title,
+                baseline_val,
+                recording_val,
+                has_keystrokes,
+                like_pattern
+            );
+        },
+        [callback](const drogon::orm::DrogonDbException& e) {
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setStatusCode(drogon::k500InternalServerError);
+            callback(resp);
+        },
+        api_key,
+        like_pattern
+    );
+}

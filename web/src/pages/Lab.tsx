@@ -812,19 +812,32 @@ export function Lab() {
                   </label>
                 </div>
 
-                <div className={!hasBaseline ? 'opacity-50 grayscale pointer-events-none' : ''}>
-                  <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Download size={20}/> Filesystem Download</h2>
-                  <label className="flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors font-mono text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={allowFsDownload} 
-                      onChange={(e) => handleFsDownloadChange(e.target.checked)}
-                      disabled={!hasBaseline}
-                      className="accent-primary w-4 h-4"
-                    />
-                    <span className="font-bold">Allow Viewers to Download</span>
-                  </label>
-                </div>
+                {isOwner && id && (
+                  <div>
+                    <h2 className="font-headline font-black text-lg uppercase tracking-tight text-on-surface mb-6 border-b-4 border-on-surface pb-2 flex items-center gap-2"><Settings size={20}/> Project Configuration</h2>
+                    <div className="space-y-3">
+                      <label className={`flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors font-mono text-sm ${!hasBaseline ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
+                        <input 
+                          type="checkbox" 
+                          checked={allowFsDownload} 
+                          onChange={(e) => handleFsDownloadChange(e.target.checked)}
+                          disabled={!hasBaseline}
+                          className="accent-primary w-4 h-4"
+                        />
+                        <span className="font-bold">Allow FS Download</span>
+                      </label>
+                      <button 
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-project-creator', { detail: { id } }))}
+                        className="w-full flex items-center gap-4 p-3 border-2 bg-white hover:border-on-surface cursor-pointer border-transparent transition-colors font-mono text-sm text-left group"
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <SquareTerminal size={16} className="text-on-surface opacity-70 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <span className="font-bold">Edit Project Details</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
    
                </div>
              </div>

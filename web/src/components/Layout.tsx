@@ -9,6 +9,7 @@ import { LoginModal } from './LoginModal';
 export function Layout({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editCastId, setEditCastId] = useState<string | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -23,7 +24,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   React.useLayoutEffect(() => {
     setToken(getAuthToken());
 
-    const handleOpenModal = () => setIsCreateModalOpen(true);
+    const handleOpenModal = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setEditCastId(customEvent.detail?.id || null);
+      setIsCreateModalOpen(true);
+    };
     window.addEventListener('open-project-creator', handleOpenModal);
     const handleOpenLoginModal = () => setIsLoginModalOpen(true);
     window.addEventListener('open-login-modal', handleOpenLoginModal);
@@ -159,7 +164,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </footer>
       )}
 
-      <ProjectCreatorModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+      <ProjectCreatorModal isOpen={isCreateModalOpen} editCastId={editCastId} onClose={() => setIsCreateModalOpen(false)} />
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </div>
   );
