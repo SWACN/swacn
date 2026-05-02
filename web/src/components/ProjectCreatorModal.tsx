@@ -16,6 +16,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [createTools, setCreateTools] = useState('');
   const [createFiles, setCreateFiles] = useState<FileList | null>(null);
   const [createRecordingFile, setCreateRecordingFile] = useState<File | null>(null);
+  const [existingBaseline, setExistingBaseline] = useState<string | null>(null);
+  const [existingRecording, setExistingRecording] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -30,6 +32,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
           setCreateEnvVars(Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n'));
           const binaries = data.environment?.binaries?.x86_32 || [];
           setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
+          setExistingBaseline(data.baseline || null);
+          setExistingRecording(data.recording || null);
         })
         .catch(err => console.error("Failed to fetch manifest for edit", err));
     } else if (isOpen) {
@@ -38,6 +42,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setCreateTools('');
       setCreateFiles(null);
       setCreateRecordingFile(null);
+      setExistingBaseline(null);
+      setExistingRecording(null);
       setUploadError(null);
     }
   }, [isOpen, editCastId]);
@@ -74,6 +80,11 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
           binaries: { x86_32: [] }
         }
       };
+
+      if (editCastId) {
+        if (existingBaseline) manifest.baseline = existingBaseline;
+        if (existingRecording) manifest.recording = existingRecording;
+      }
 
       if (createEnvVars.trim()) {
         createEnvVars.split('\n').forEach(line => {
@@ -151,6 +162,18 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       if (editCastId) {
         const { updateCastUpload } = await import('../lib/api');
         await updateCastUpload(editCastId, formData);
+        
+        try {
+          if ('caches' in window) {
+            const cache = await caches.open('swacn-assets-v1');
+            await cache.delete(`/uploads/${editCastId}/baseline.tar.gz`);
+            await cache.delete(`/uploads/${editCastId}/manifest.json`);
+            await cache.delete(`/uploads/${editCastId}/recording.cast`);
+            await cache.delete(`/dev-proxy?url=${encodeURIComponent(`/uploads/${editCastId}/baseline.tar.gz`)}`);
+          }
+        } catch (e) {
+          console.error("Cache clear failed", e);
+        }
       } else {
         const res = await fetch('/api/v1/casts/upload', {
           method: 'POST',
@@ -240,7 +263,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
             <div>
               <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
-              <label className="block w-full bg-surface-container-high border-2 border-on-surface p-4 cursor-pointer hover:bg-white transition-colors group">
+              <label className={`block w-full bg-surface-container-high border-2 ${editCastId && (!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
                 <input 
                   type="file" 
                   // @ts-ignore
@@ -250,21 +273,26 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   className="hidden"
                 />
                 <div className="flex flex-col items-center justify-center gap-2">
-                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform">
-                    {createFiles && createFiles.length > 0 ? "Change Folder" : "Select Folder"}
+                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform text-center">
+                    {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
                   </span>
-                  {createFiles && createFiles.length > 0 && (
-                    <span className="text-xs opacity-70 font-mono text-center">
-                      Selected folder: {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
+                  
+                  {createFiles && createFiles.length > 0 ? (
+                    <span className="text-xs opacity-70 font-mono text-primary font-bold">
+                      {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
                     </span>
-                  )}
+                  ) : (editCastId && (
+                    <span className="text-xs opacity-50 font-mono">
+                      Leave empty to keep existing
+                    </span>
+                  ))}
                 </div>
               </label>
             </div>
 
             <div>
               <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Terminal Recording (.cast file)</label>
-              <label className="block w-full bg-surface-container-high border-2 border-on-surface p-4 cursor-pointer hover:bg-white transition-colors group">
+              <label className={`block w-full bg-surface-container-high border-2 ${editCastId && !createRecordingFile ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
                 <input 
                   type="file" 
                   accept=".cast"
@@ -272,14 +300,19 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   className="hidden"
                 />
                 <div className="flex flex-col items-center justify-center gap-2">
-                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform">
-                    {createRecordingFile ? "Change Recording" : "Select Recording"}
+                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform text-center">
+                    {createRecordingFile ? "New Recording Selected" : (editCastId ? "Replace Recording" : "Select Recording")}
                   </span>
-                  {createRecordingFile && (
-                    <span className="text-xs opacity-70 font-mono text-center">
-                      Selected recording: {createRecordingFile.name}
+                  
+                  {createRecordingFile ? (
+                    <span className="text-xs opacity-70 font-mono text-primary font-bold">
+                      {createRecordingFile.name}
                     </span>
-                  )}
+                  ) : (editCastId && (
+                    <span className="text-xs opacity-50 font-mono">
+                      Leave empty to keep existing
+                    </span>
+                  ))}
                 </div>
               </label>
             </div>

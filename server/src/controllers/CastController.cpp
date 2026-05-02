@@ -425,11 +425,9 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
             fs::path cast_dir = root_upload_path / id;
 
             try {
-                if (fs::exists(cast_dir)) {
-                    // We clear the directory to replace the files cleanly
-                    fs::remove_all(cast_dir);
+                if (!fs::exists(cast_dir)) {
+                    fs::create_directories(cast_dir);
                 }
-                fs::create_directories(cast_dir);
             } catch (const std::exception& e) {
                 LOG_ERROR << "FS Error: " << e.what();
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -450,6 +448,11 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 else targetName = file.getFileName(); 
 
                 std::string absolute_save_path = (cast_dir / targetName).string();
+                try {
+                    if (fs::exists(absolute_save_path)) {
+                        fs::remove(absolute_save_path);
+                    }
+                } catch (...) {}
                 file.saveAs(absolute_save_path);
             }
 
@@ -480,7 +483,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
 
             // Update Database
             dbClient->execSqlAsync(
-                "UPDATE casts SET title = NULLIF($1, ''), baseline_url = NULLIF($2, ''), recording_url = NULLIF($3, ''), show_keystrokes = $4 WHERE manifest_url LIKE $5 RETURNING id",
+                "UPDATE casts SET title = COALESCE(NULLIF($1, ''), title), baseline_url = COALESCE(NULLIF($2, ''), baseline_url), recording_url = COALESCE(NULLIF($3, ''), recording_url), show_keystrokes = CASE WHEN $6 THEN $4 ELSE show_keystrokes END WHERE manifest_url LIKE $5 RETURNING id",
                 [callback, id](const drogon::orm::Result& res) {
                     const char* env_url = getenv("APP_URL");
                     std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
@@ -504,7 +507,8 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 baseline_val,
                 recording_val,
                 has_keystrokes,
-                like_pattern
+                like_pattern,
+                has_recording
             );
         },
         [callback](const drogon::orm::DrogonDbException& e) {

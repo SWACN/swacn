@@ -18,6 +18,96 @@ export type VMStatus =
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
 let globalWasmModulePromise: Promise<WebAssembly.Module> | null = null;
 
+export async function fetchAssetWithCache(url: string, useProxy: boolean = true): Promise<Uint8Array> {
+  if (fetchPromises.has(url)) {
+    console.log(`[V86VM] Concurrent fetch deduplicated: ${url}`);
+    const data = await fetchPromises.get(url)!;
+    // Return a copy so multiple VMs don't share and accidentally mutate/transfer the exact same underlying ArrayBuffer
+    return new Uint8Array(data);
+  }
+
+  const fetchPromise = (async () => {
+    const cacheName = 'swacn-assets-v1';
+    
+    const checkCache = async () => {
+      try {
+        if ('caches' in window) {
+          const cache = await caches.open(cacheName);
+          const cachedResponse = await cache.match(url);
+          if (cachedResponse) {
+            return new Uint8Array(await cachedResponse.arrayBuffer());
+          }
+        }
+      } catch (e) {
+        console.warn("[V86VM] Cache lookup failed:", e);
+      }
+      return null;
+    };
+
+    // 1. Try to get from Cache API first (optimistic fast-path)
+    let cached = await checkCache();
+    if (cached) {
+      console.log(`[V86VM] Cache hit: ${url}`);
+      return cached;
+    }
+
+    console.log(`[V86VM] Cache miss: ${url}. Preparing to fetch...`);
+    
+    const performFetch = async () => {
+      const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status} for ${url}`);
+      
+      const buffer = await res.arrayBuffer();
+      const data = new Uint8Array(buffer);
+
+      try {
+        if ('caches' in window) {
+          const cache = await caches.open(cacheName);
+          await cache.put(url, new Response(buffer, {
+            headers: {
+              'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
+              'Content-Length': buffer.byteLength.toString()
+            }
+          }));
+        }
+      } catch (e) {
+        console.warn("[V86VM] Failed to store in cache:", e);
+      }
+      return data;
+    };
+
+    // 2. Use Web Locks API to prevent multiple iframes from fetching concurrently
+    if ('locks' in navigator) {
+      return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
+        // Inside the lock, check cache again in case another iframe just finished fetching it
+        cached = await checkCache();
+        if (cached) {
+          console.log(`[V86VM] Cache hit after lock wait: ${url}`);
+          return cached;
+        }
+        console.log(`[V86VM] Lock acquired, initiating network fetch: ${url}`);
+        return await performFetch();
+      });
+    } else {
+      // Fallback for older browsers
+      return await performFetch();
+    }
+  })();
+
+  fetchPromises.set(url, fetchPromise);
+  
+  try {
+    const data = await fetchPromise;
+    // Keep it in the map for instant memory retrieval for future VMs in the same session
+    return new Uint8Array(data);
+  } catch (err) {
+    // Remove from map on error so it can be retried
+    fetchPromises.delete(url);
+    throw err;
+  }
+}
+
 export class V86VM {
   private xterm: Terminal;
   private emulator: any = null;
@@ -82,98 +172,6 @@ export class V86VM {
     });
   }
 
-  // Uses the browser Cache API and backend proxy to fetch assets efficiently
-  // Deduplicates concurrent requests for the same URL across multiple VMs
-  private async fetchWithCache(url: string, useProxy: boolean = true): Promise<Uint8Array> {
-    if (fetchPromises.has(url)) {
-      console.log(`[V86VM] Concurrent fetch deduplicated: ${url}`);
-      const data = await fetchPromises.get(url)!;
-      // Return a copy so multiple VMs don't share and accidentally mutate/transfer the exact same underlying ArrayBuffer
-      return new Uint8Array(data);
-    }
-
-    const fetchPromise = (async () => {
-      const cacheName = 'swacn-assets-v1';
-      
-      const checkCache = async () => {
-        try {
-          if ('caches' in window) {
-            const cache = await caches.open(cacheName);
-            const cachedResponse = await cache.match(url);
-            if (cachedResponse) {
-              return new Uint8Array(await cachedResponse.arrayBuffer());
-            }
-          }
-        } catch (e) {
-          console.warn("[V86VM] Cache lookup failed:", e);
-        }
-        return null;
-      };
-
-      // 1. Try to get from Cache API first (optimistic fast-path)
-      let cached = await checkCache();
-      if (cached) {
-        console.log(`[V86VM] Cache hit: ${url}`);
-        return cached;
-      }
-
-      console.log(`[V86VM] Cache miss: ${url}. Preparing to fetch...`);
-      
-      const performFetch = async () => {
-        const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
-        const res = await fetch(fetchUrl);
-        if (!res.ok) throw new Error(`Fetch failed: ${res.status} for ${url}`);
-        
-        const buffer = await res.arrayBuffer();
-        const data = new Uint8Array(buffer);
-
-        try {
-          if ('caches' in window) {
-            const cache = await caches.open(cacheName);
-            await cache.put(url, new Response(buffer, {
-              headers: {
-                'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
-                'Content-Length': buffer.byteLength.toString()
-              }
-            }));
-          }
-        } catch (e) {
-          console.warn("[V86VM] Failed to store in cache:", e);
-        }
-        return data;
-      };
-
-      // 2. Use Web Locks API to prevent multiple iframes from fetching concurrently
-      if ('locks' in navigator) {
-        return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
-          // Inside the lock, check cache again in case another iframe just finished fetching it
-          cached = await checkCache();
-          if (cached) {
-            console.log(`[V86VM] Cache hit after lock wait: ${url}`);
-            return cached;
-          }
-          console.log(`[V86VM] Lock acquired, initiating network fetch: ${url}`);
-          return await performFetch();
-        });
-      } else {
-        // Fallback for older browsers
-        return await performFetch();
-      }
-    })();
-
-    fetchPromises.set(url, fetchPromise);
-    
-    try {
-      const data = await fetchPromise;
-      // Keep it in the map for instant memory retrieval for future VMs in the same session
-      return new Uint8Array(data);
-    } catch (err) {
-      // Remove from map on error so it can be retried
-      fetchPromises.delete(url);
-      throw err;
-    }
-  }
-
   public async boot(
     manifestUrl: string | null, 
     baselineUrl: string | null, 
@@ -198,9 +196,9 @@ export class V86VM {
 
       // 1. Fire off OS asset fetches in parallel, fully deduplicated across instances
       const osFetchPromise = Promise.all([
-        this.fetchWithCache("/v86-assets/v86/bios/seabios.bin", false),
-        this.fetchWithCache("/v86-assets/v86/bios/vgabios.bin", false),
-        this.fetchWithCache("/i-copy-sh/buildroot-bzimage.bin", false)
+        fetchAssetWithCache("/v86-assets/v86/bios/seabios.bin", false),
+        fetchAssetWithCache("/v86-assets/v86/bios/vgabios.bin", false),
+        fetchAssetWithCache("/i-copy-sh/buildroot-bzimage.bin", false)
       ]);
 
       // 2. Fire off Manifest & Baseline fetches in parallel with OS boot
@@ -208,15 +206,15 @@ export class V86VM {
       let baselinePromise: Promise<Uint8Array> | null = null;
       
       if (manifestUrl) {
-        manifestPromise = fetch(manifestUrl, { signal }).then(async r => {
-           if (!r.ok) throw new Error(`Manifest error: ${r.status}`);
-           const m = await r.json();
+        manifestPromise = fetchAssetWithCache(manifestUrl, false).then(data => {
+           const text = new TextDecoder().decode(data);
+           const m = JSON.parse(text);
            if (onManifest) onManifest(m);
            return m;
         });
 
         if (baselineUrl) {
-           baselinePromise = this.fetchWithCache(baselineUrl, false);
+           baselinePromise = fetchAssetWithCache(baselineUrl, false);
         }
       }
 
@@ -308,7 +306,7 @@ export class V86VM {
           try {
             // OPTIMIZATION: Download all tools in parallel
             const downloadPromises = binariesList.map(async (tool: any) => {
-              const data = await this.fetchWithCache(tool.url);
+              const data = await fetchAssetWithCache(tool.url);
               return { tool, data };
             });
             

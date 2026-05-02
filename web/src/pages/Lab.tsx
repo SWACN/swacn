@@ -9,7 +9,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken, setAuthToken } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
-import { V86VM, VMStatus } from '../lib/V86VM';
+import { V86VM, fetchAssetWithCache, VMStatus } from '../lib/V86VM';
 
 type Tab = 'projects' | 'settings';
 type Theme = 'latte' | 'frappe' | 'macchiato' | 'mocha' | 'swacn' | 'swacn-dark';
@@ -324,8 +324,8 @@ export function Lab() {
   useEffect(() => {
     if (!id || !hasRecording || !recordingUrl) return;
     
-        fetch(recordingUrl)
-          .then(res => res.text())
+        fetchAssetWithCache(recordingUrl, false)
+          .then(data => new TextDecoder().decode(data))
           .then(text => {
             const lines = text.split('\n');
             const rawKeys: {t: number, k: string, special: boolean}[] = [];
