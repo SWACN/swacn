@@ -14,6 +14,10 @@ export type VMStatus =
   | 'ready' 
   | 'error';
 
+// Module-level map to deduplicate concurrent requests for the exact same asset across multiple VM instances
+const fetchPromises = new Map<string, Promise<Uint8Array>>();
+let globalWasmModulePromise: Promise<WebAssembly.Module> | null = null;
+
 export class V86VM {
   private xterm: Terminal;
   private emulator: any = null;
@@ -79,53 +83,95 @@ export class V86VM {
   }
 
   // Uses the browser Cache API and backend proxy to fetch assets efficiently
+  // Deduplicates concurrent requests for the same URL across multiple VMs
   private async fetchWithCache(url: string, useProxy: boolean = true): Promise<Uint8Array> {
-    const cacheName = 'swacn-assets-v1';
-    
-    // 1. Try to get from Cache API first
-    try {
-      if ('caches' in window) {
-        const cache = await caches.open(cacheName);
-        const cachedResponse = await cache.match(url);
-        if (cachedResponse) {
-          console.log(`[V86VM] Cache hit: ${url}`);
-          const buffer = await cachedResponse.arrayBuffer();
-          return new Uint8Array(buffer);
-        }
-      }
-    } catch (e) {
-      console.warn("[V86VM] Cache lookup failed:", e);
+    if (fetchPromises.has(url)) {
+      console.log(`[V86VM] Concurrent fetch deduplicated: ${url}`);
+      const data = await fetchPromises.get(url)!;
+      // Return a copy so multiple VMs don't share and accidentally mutate/transfer the exact same underlying ArrayBuffer
+      return new Uint8Array(data);
     }
 
-    console.log(`[V86VM] Cache miss: ${url}`);
-    
-    // 2. Fetch from network
-    const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
-    const res = await fetch(fetchUrl);
-    if (!res.ok) {
-      throw new Error(`Fetch failed: ${res.status} for ${url}`);
-    }
-    
-    const buffer = await res.arrayBuffer();
-    const data = new Uint8Array(buffer);
-
-    // 3. Store in cache for next time
-    try {
-      if ('caches' in window) {
-        const cache = await caches.open(cacheName);
-        // We create a fresh response to store in cache
-        await cache.put(url, new Response(buffer, {
-          headers: {
-            'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
-            'Content-Length': buffer.byteLength.toString()
+    const fetchPromise = (async () => {
+      const cacheName = 'swacn-assets-v1';
+      
+      const checkCache = async () => {
+        try {
+          if ('caches' in window) {
+            const cache = await caches.open(cacheName);
+            const cachedResponse = await cache.match(url);
+            if (cachedResponse) {
+              return new Uint8Array(await cachedResponse.arrayBuffer());
+            }
           }
-        }));
-      }
-    } catch (e) {
-      console.warn("[V86VM] Failed to store in cache:", e);
-    }
+        } catch (e) {
+          console.warn("[V86VM] Cache lookup failed:", e);
+        }
+        return null;
+      };
 
-    return data;
+      // 1. Try to get from Cache API first (optimistic fast-path)
+      let cached = await checkCache();
+      if (cached) {
+        console.log(`[V86VM] Cache hit: ${url}`);
+        return cached;
+      }
+
+      console.log(`[V86VM] Cache miss: ${url}. Preparing to fetch...`);
+      
+      const performFetch = async () => {
+        const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
+        const res = await fetch(fetchUrl);
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status} for ${url}`);
+        
+        const buffer = await res.arrayBuffer();
+        const data = new Uint8Array(buffer);
+
+        try {
+          if ('caches' in window) {
+            const cache = await caches.open(cacheName);
+            await cache.put(url, new Response(buffer, {
+              headers: {
+                'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
+                'Content-Length': buffer.byteLength.toString()
+              }
+            }));
+          }
+        } catch (e) {
+          console.warn("[V86VM] Failed to store in cache:", e);
+        }
+        return data;
+      };
+
+      // 2. Use Web Locks API to prevent multiple iframes from fetching concurrently
+      if ('locks' in navigator) {
+        return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
+          // Inside the lock, check cache again in case another iframe just finished fetching it
+          cached = await checkCache();
+          if (cached) {
+            console.log(`[V86VM] Cache hit after lock wait: ${url}`);
+            return cached;
+          }
+          console.log(`[V86VM] Lock acquired, initiating network fetch: ${url}`);
+          return await performFetch();
+        });
+      } else {
+        // Fallback for older browsers
+        return await performFetch();
+      }
+    })();
+
+    fetchPromises.set(url, fetchPromise);
+    
+    try {
+      const data = await fetchPromise;
+      // Keep it in the map for instant memory retrieval for future VMs in the same session
+      return new Uint8Array(data);
+    } catch (err) {
+      // Remove from map on error so it can be retried
+      fetchPromises.delete(url);
+      throw err;
+    }
   }
 
   public async boot(
@@ -148,16 +194,54 @@ export class V86VM {
     console.log("[V86VM] Cache API available:", ('caches' in window));
 
     try {
+      onStatus('initializing');
+
+      // 1. Fire off OS asset fetches in parallel, fully deduplicated across instances
+      const osFetchPromise = Promise.all([
+        this.fetchWithCache("/v86-assets/v86/bios/seabios.bin", false),
+        this.fetchWithCache("/v86-assets/v86/bios/vgabios.bin", false),
+        this.fetchWithCache("/i-copy-sh/buildroot-bzimage.bin", false)
+      ]);
+
+      // 2. Fire off Manifest & Baseline fetches in parallel with OS boot
+      let manifestPromise: Promise<any> | null = null;
+      let baselinePromise: Promise<Uint8Array> | null = null;
+      
+      if (manifestUrl) {
+        manifestPromise = fetch(manifestUrl, { signal }).then(async r => {
+           if (!r.ok) throw new Error(`Manifest error: ${r.status}`);
+           const m = await r.json();
+           if (onManifest) onManifest(m);
+           return m;
+        });
+
+        if (baselineUrl) {
+           baselinePromise = this.fetchWithCache(baselineUrl, false);
+        }
+      }
+
       onStatus('booting_kernel');
+
+      const [biosData, vgabiosData, bzimageData] = await osFetchPromise;
 
       // Boot a lightweight Buildroot Linux via v86
       this.emulator = new V86({
-        wasm_path: wasmURL,
+        wasm_fn: async (imports) => {
+          if (!globalWasmModulePromise) {
+            globalWasmModulePromise = WebAssembly.compileStreaming(fetch(wasmURL)).catch(async () => {
+              const res = await fetch(wasmURL);
+              return WebAssembly.compile(await res.arrayBuffer());
+            });
+          }
+          const module = await globalWasmModulePromise;
+          const instance = await WebAssembly.instantiate(module, imports);
+          return instance.exports;
+        },
         memory_size: 256 * 1024 * 1024,
         vga_memory_size: 8 * 1024 * 1024,
-        bios: { url: "/v86-assets/v86/bios/seabios.bin" },
-        vga_bios: { url: "/v86-assets/v86/bios/vgabios.bin" },
-        bzimage: { url: "/i-copy-sh/buildroot-bzimage.bin" },
+        bios: { buffer: biosData.buffer as ArrayBuffer },
+        vga_bios: { buffer: vgabiosData.buffer as ArrayBuffer },
+        bzimage: { buffer: bzimageData.buffer as ArrayBuffer },
         filesystem: {}, // Enable 9p filesystem
         cmdline: "tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0",
         autostart: true,
@@ -191,19 +275,15 @@ export class V86VM {
 
       let manifestEnv: Record<string, string> = {};
 
-      if (manifestUrl) {
-        const manifestRes = await fetch(manifestUrl, { signal });
-        if (!manifestRes.ok) throw new Error(`Manifest error: ${manifestRes.status}`);
-        const manifest = await manifestRes.json();
-        
+      if (manifestPromise) {
+        const manifest = await manifestPromise;
         manifestEnv = manifest.env ?? manifest.environment?.env ?? {};
-        if (onManifest) onManifest(manifest);
 
-        if (manifest.baseline && baselineUrl) {
+        if (manifest.baseline && baselinePromise) {
           onStatus('downloading_baseline');
           try {
-            // Baseline is cached using our new helper
-            const baselineData = await this.fetchWithCache(baselineUrl, false);
+            // Await the baseline data which was likely already downloading in parallel with the OS boot
+            const baselineData = await baselinePromise;
             
             onStatus('extracting_baseline');
             // Inject directly into the v86 9p share (mounted at /mnt/ inside the VM)
