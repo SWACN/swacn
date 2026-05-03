@@ -145,12 +145,16 @@ export function Lab() {
     };
   }, [isEmbed]);
 
+  // Reset VM status ONLY when the project id changes — not on every projects reload.
+  // Clients receive vmStatus via BroadcastChannel; resetting on projects reload
+  // would clobber those updates before the next broadcast arrives.
   useEffect(() => {
-    // Reset project-specific states immediately on ID change
     setVmStatus('initializing');
     setIsPlaying(true);
     setIsSidebarOpen(false);
+  }, [id]);
 
+  useEffect(() => {
     if (id) {
       // 1. OPTIMISTIC SYNC FROM CACHED PROJECTS LIST (Removes UI Flash)
       const cached = projects.find(p => p.id === id);
@@ -440,7 +444,7 @@ export function Lab() {
       if (isSandboxMode) fitAddon.fit();
     }, 100);
     
-    const vm = new V86VM(term);
+    const vm = new V86VM(term, id ?? 'sandbox');
     vm.boot(manifestUrl, baselineUrl, (status) => setVmStatus(status), (manifest) => {
       // Manifest boot callback - we keep it for potential future metadata but 
       // rely on the top-level project state for isSandboxMode/hasRecording.
@@ -690,6 +694,14 @@ export function Lab() {
         /* 3. XTERM TRANSPARENCY ENFORCEMENT */
         .xterm, .xterm-viewport, .xterm-screen {
           background-color: transparent !important;
+        }
+
+        /* 4. HIDE ASCIINEMA TOOLTIP BLOB */
+        .ap-tooltip, [class*="ap-tooltip"], .ap-control-bar .ap-btn::after, .ap-control-bar .ap-btn::before {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
         }
 
         /* 4. KEY HUD ANIMATIONS */

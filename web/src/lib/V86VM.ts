@@ -1,433 +1,434 @@
 import { Terminal } from '@xterm/xterm';
 // @ts-ignore
 import { V86 } from 'v86';
-
 import wasmURL from 'v86/build/v86.wasm?url';
 
-export type VMStatus = 
-  | 'initializing' 
-  | 'booting_kernel' 
-  | 'downloading_baseline' 
-  | 'extracting_baseline' 
-  | 'downloading_tools' 
-  | 'installing_tools' 
-  | 'ready' 
-  | 'error';
+export type VMStatus =
+  | 'initializing' | 'booting_kernel' | 'downloading_baseline'
+  | 'extracting_baseline' | 'downloading_tools' | 'installing_tools'
+  | 'ready' | 'error';
 
-// Module-level map to deduplicate concurrent requests for the exact same asset across multiple VM instances
+// ---------------------------------------------------------------------------
+// Storage keys — all cross-iframe messaging via localStorage + storage events
+// (BroadcastChannel breaks with COOP:same-origin in embedded iframes)
+// ---------------------------------------------------------------------------
+const K = {
+  master:  (id: string) => `swacn_vm_master_${id}`,
+  status:  (id: string) => `swacn_vm_status_${id}`,
+  output:  (id: string) => `swacn_vm_output_${id}`,
+  input:   (id: string) => `swacn_vm_input_${id}`,
+};
+
+// ---------------------------------------------------------------------------
+// fetchAssetWithCache — exported for Lab.tsx recording fetch
+// ---------------------------------------------------------------------------
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
-let globalWasmModulePromise: Promise<WebAssembly.Module> | null = null;
 
-export async function fetchAssetWithCache(url: string, useProxy: boolean = true): Promise<Uint8Array> {
-  if (fetchPromises.has(url)) {
-    console.log(`[V86VM] Concurrent fetch deduplicated: ${url}`);
-    const data = await fetchPromises.get(url)!;
-    // Return a copy so multiple VMs don't share and accidentally mutate/transfer the exact same underlying ArrayBuffer
-    return new Uint8Array(data);
-  }
-
-  const fetchPromise = (async () => {
+export async function fetchAssetWithCache(url: string, useProxy = true): Promise<Uint8Array> {
+  if (fetchPromises.has(url)) return new Uint8Array(await fetchPromises.get(url)!);
+  const p = (async () => {
     const cacheName = 'swacn-assets-v1';
-    
-    const checkCache = async () => {
+    const checkCache = async (): Promise<Uint8Array | null> => {
       try {
         if ('caches' in window) {
           const cache = await caches.open(cacheName);
-          const cachedResponse = await cache.match(url);
-          if (cachedResponse) {
-            return new Uint8Array(await cachedResponse.arrayBuffer());
-          }
+          const hit = await cache.match(url);
+          if (hit) return new Uint8Array(await hit.arrayBuffer());
         }
-      } catch (e) {
-        console.warn("[V86VM] Cache lookup failed:", e);
-      }
+      } catch (_) {}
       return null;
     };
-
-    // 1. Try to get from Cache API first (optimistic fast-path)
     let cached = await checkCache();
-    if (cached) {
-      console.log(`[V86VM] Cache hit: ${url}`);
-      return cached;
-    }
-
-    console.log(`[V86VM] Cache miss: ${url}. Preparing to fetch...`);
-    
+    if (cached) { console.log(`[V86VM] Cache hit: ${url}`); return cached; }
+    console.log(`[V86VM] Cache miss: ${url}`);
     const performFetch = async () => {
       const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
       const res = await fetch(fetchUrl);
-      if (!res.ok) throw new Error(`Fetch failed: ${res.status} for ${url}`);
-      
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const buffer = await res.arrayBuffer();
-      const data = new Uint8Array(buffer);
-
       try {
         if ('caches' in window) {
           const cache = await caches.open(cacheName);
           await cache.put(url, new Response(buffer, {
-            headers: {
-              'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
-              'Content-Length': buffer.byteLength.toString()
-            }
+            headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream' }
           }));
         }
-      } catch (e) {
-        console.warn("[V86VM] Failed to store in cache:", e);
-      }
-      return data;
+      } catch (_) {}
+      return new Uint8Array(buffer);
     };
-
-    // 2. Use Web Locks API to prevent multiple iframes from fetching concurrently
     if ('locks' in navigator) {
       return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
-        // Inside the lock, check cache again in case another iframe just finished fetching it
-        cached = await checkCache();
-        if (cached) {
-          console.log(`[V86VM] Cache hit after lock wait: ${url}`);
-          return cached;
-        }
-        console.log(`[V86VM] Lock acquired, initiating network fetch: ${url}`);
-        return await performFetch();
+        const c = await checkCache(); return c ?? await performFetch();
       });
-    } else {
-      // Fallback for older browsers
-      return await performFetch();
     }
+    return await performFetch();
   })();
-
-  fetchPromises.set(url, fetchPromise);
-  
-  try {
-    const data = await fetchPromise;
-    // Keep it in the map for instant memory retrieval for future VMs in the same session
-    return new Uint8Array(data);
-  } catch (err) {
-    // Remove from map on error so it can be retried
-    fetchPromises.delete(url);
-    throw err;
-  }
+  fetchPromises.set(url, p);
+  try { return new Uint8Array(await p); } catch (err) { fetchPromises.delete(url); throw err; }
 }
+
+// ---------------------------------------------------------------------------
+// V86VM — master/client via navigator.locks election + localStorage messaging
+// ---------------------------------------------------------------------------
+
+// NOTE: WebAssembly.Module cannot be stored in IDB or postMessage'd across
+// iframes when COEP:require-corp is active (DataCloneError by design — Spectre
+// mitigation). Each master context compiles its own instance. The .wasm bytes
+// ARE cached in CacheStorage by fetchAssetWithCache, so the network round-trip
+// is eliminated and only the JIT step (~100-200ms) repeats per master.
+//
+// Module-level promise deduplicates concurrent compile requests within one context.
+let wasmModulePromise: Promise<WebAssembly.Module> | null = null;
+
+async function getWasmModule(): Promise<WebAssembly.Module> {
+  if (wasmModulePromise) return wasmModulePromise;
+  wasmModulePromise = (async () => {
+    // Fetch bytes via our asset cache (CacheStorage) — no network if already cached
+    const bytes = await fetchAssetWithCache(wasmURL, false);
+    console.log('[V86VM] WASM module: compiling from cached bytes...');
+    const module = await WebAssembly.compile(bytes.buffer as ArrayBuffer);
+    console.log('[V86VM] WASM module: ready');
+    return module;
+  })();
+  return wasmModulePromise;
+}
+
 
 export class V86VM {
   private xterm: Terminal;
+  private projectId: string;
+  private disposed = false;
+  private role: 'master' | 'client' | null = null;
+
+  // Master state
   private emulator: any = null;
-  private dataListener: { dispose: () => void } | null = null;
-  
-  private outputBuffer = "";
+  private outputBuffer = '';
   private resolveCommand: (() => void) | null = null;
   private currentMarker: string | null = null;
   private isInteractiveMode = false;
-  private abortController: AbortController | null = null;
-  private hasPrompt = false;
-  private hasBooted = false;
+  private disposeResolve: (() => void) | null = null;
+  private currentStatus: VMStatus = 'initializing';
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private outputSeq = 0;
 
-  constructor(xterm: Terminal) {
+  // Client state
+  private xtermDataListener: { dispose: () => void } | null = null;
+  private storageListener: ((e: StorageEvent) => void) | null = null;
+
+  constructor(xterm: Terminal, projectId: string) {
     this.xterm = xterm;
+    this.projectId = projectId;
+  }
+
+  public boot(
+    manifestUrl: string | null, baselineUrl: string | null,
+    onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
+  ) { this._boot(manifestUrl, baselineUrl, onStatus, onManifest); }
+
+  private async _boot(
+    manifestUrl: string | null, baselineUrl: string | null,
+    onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
+  ) {
+    // Yield to the event loop BEFORE requesting the lock.
+    // React Strict Mode runs effect → cleanup → effect in quick succession.
+    // This pause lets the cleanup (dispose) run, so render #1 sees disposed=true
+    // and exits here — leaving render #2 to request the lock uncontested.
+    await new Promise(r => setTimeout(r, 0));
+    if (this.disposed) return;
+
+    // Use only navigator.locks for election — it is session-scoped and never
+    // goes stale (unlike localStorage which persists across page loads).
+    navigator.locks.request(`swacn-vm-master-${this.projectId}`, { ifAvailable: true }, async (lock) => {
+      if (this.disposed) return;
+
+      if (!lock) {
+        // Another iframe holds the lock → become a client
+        this.role = 'client';
+        this.runAsClient(onStatus);
+        return;
+      }
+
+      // We hold the lock → we are the master
+      this.role = 'master';
+      // Wipe stale keys from any previous session before writing fresh state
+      [K.master(this.projectId), K.status(this.projectId),
+       K.output(this.projectId), K.input(this.projectId)].forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(K.master(this.projectId), 'alive');
+
+      await this.runAsMaster(manifestUrl, baselineUrl, onStatus, onManifest);
+      if (!this.disposed) {
+        await new Promise<void>(res => { this.disposeResolve = res; });
+      }
+      // Lock released when this callback returns
+    });
+  }
+
+  // ── CLIENT ────────────────────────────────────────────────────────────────
+
+  private runAsClient(onStatus: (s: VMStatus) => void) {
+    console.log('[V86VM] Running as client (localStorage mode)');
+
+    // Immediately apply any status already written by master
+    const existingStatus = localStorage.getItem(K.status(this.projectId));
+    if (existingStatus) {
+      try { onStatus(JSON.parse(existingStatus).status); } catch (_) {}
+    }
+
+    const listener = (e: StorageEvent) => {
+      if (this.disposed) return;
+      if (e.key === K.status(this.projectId) && e.newValue) {
+        try { onStatus(JSON.parse(e.newValue).status); } catch (_) {}
+      }
+      if (e.key === K.output(this.projectId) && e.newValue) {
+        try {
+          const msg = JSON.parse(e.newValue);
+          if (msg.type === 'clear') { this.xterm.clear(); }
+          else if (msg.type === 'ready') {
+            if (msg.data) this.xterm.write(msg.data);
+            this.xtermDataListener = this.xterm.onData(data =>
+              localStorage.setItem(K.input(this.projectId),
+                JSON.stringify({ seq: Date.now(), data })));
+            onStatus('ready');
+          } else if (msg.type === 'data') {
+            this.xterm.write(msg.data);
+          }
+        } catch (_) {}
+      }
+    };
+
+    this.storageListener = listener;
+    window.addEventListener('storage', listener);
+  }
+
+  // ── MASTER ────────────────────────────────────────────────────────────────
+
+  private setStatus(status: VMStatus) {
+    if (this.disposed) return;
+    this.currentStatus = status;
+    localStorage.setItem(K.status(this.projectId), JSON.stringify({ status }));
+  }
+
+  private broadcastOutput(msg: object) {
+    if (this.disposed) return;
+    localStorage.setItem(K.output(this.projectId), JSON.stringify({ seq: this.outputSeq++, ...msg }));
   }
 
   private consoleOut = (byte: number) => {
+    if (this.disposed) return;
     const char = String.fromCharCode(byte);
-    
     if (this.isInteractiveMode) {
       this.xterm.write(char);
+      // Batch output — flush every 16ms
+      this.pendingOutput += char;
+      if (!this.outputFlushTimer) {
+        this.outputFlushTimer = setTimeout(() => {
+          if (this.pendingOutput) this.broadcastOutput({ type: 'data', data: this.pendingOutput });
+          this.pendingOutput = '';
+          this.outputFlushTimer = null;
+        }, 16);
+      }
     } else {
       this.outputBuffer += char;
-
-      // When checking for the marker, also wait for the root prompt (# or % or $) to ensure command finished
-      if (this.currentMarker && this.outputBuffer.includes(this.currentMarker) && (this.outputBuffer.endsWith('# ') || this.outputBuffer.endsWith('% ') || this.outputBuffer.endsWith('$ '))) {
-        if (this.resolveCommand) {
-          this.resolveCommand();
-          this.resolveCommand = null;
-        }
+      if (this.resolveCommand && this.currentMarker &&
+          this.outputBuffer.includes(this.currentMarker) &&
+          (this.outputBuffer.endsWith('# ') || this.outputBuffer.endsWith('% ') || this.outputBuffer.endsWith('$ '))) {
+        const r = this.resolveCommand; this.resolveCommand = null; r();
       }
-
-      if (this.outputBuffer.length > 1024 * 1024) {
+      if (this.outputBuffer.length > 1024 * 1024)
         this.outputBuffer = this.outputBuffer.substring(this.outputBuffer.length - 1000);
-      }
     }
   };
+  private pendingOutput = '';
+  private outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   private async execWait(cmd: string): Promise<string> {
-    if (!this.emulator) return "";
-    this.outputBuffer = "";
-    
+    if (!this.emulator || this.disposed) return '';
+    this.outputBuffer = '';
     const nonce = Math.random().toString(36).substring(2, 10);
     this.currentMarker = `__SWACN_${nonce}__`;
-    
-    return new Promise<string>(async (resolve) => {
+    return new Promise<string>(async resolve => {
       this.resolveCommand = () => {
-        const cleanOutput = this.outputBuffer
-          .split(this.currentMarker || "")[0]
-          .replace(cmd, "")
-          .trim();
-        resolve(cleanOutput);
+        const out = this.outputBuffer.split(this.currentMarker || '')[0].replace(cmd, '').trim();
+        this.currentMarker = null; resolve(out);
       };
-      
-      const fullCmd = `${cmd} ; printf "${this.currentMarker}"\n`;
-      for (let i = 0; i < fullCmd.length; i++) {
-        this.emulator?.serial0_send(fullCmd[i]);
-        // Small delay to prevent buffer overflow in v86 serial port
-        if (i > 0 && i % 64 === 0) await new Promise(r => setTimeout(r, 1)); 
+      const full = `${cmd} ; printf "${this.currentMarker}"\n`;
+      for (let i = 0; i < full.length; i++) {
+        if (this.disposed) { resolve(''); return; }
+        this.emulator?.serial0_send(full[i]);
+        if (i > 0 && i % 64 === 0) await new Promise(r => setTimeout(r, 1));
       }
     });
   }
 
-  public async boot(
-    manifestUrl: string | null, 
-    baselineUrl: string | null, 
-    onStatus: (status: VMStatus) => void,
-    onManifest?: (manifest: any) => void
+  private async runAsMaster(
+    manifestUrl: string | null, baselineUrl: string | null,
+    onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
   ) {
-    // Guard against React Strict Mode double-invocation
-    if (this.hasBooted) {
-      console.warn("[V86VM] Already booted. Dispose first.");
-      return;
-    }
-    this.hasBooted = true;
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
-    onStatus('initializing');
-    
-    console.log("[V86VM] Booting with manifest:", manifestUrl);
-    console.log("[V86VM] Cache API available:", ('caches' in window));
+    console.log('[V86VM] Running as master (localStorage mode)');
+
+    // Listen for keyboard input from clients via localStorage
+    const inputListener = (e: StorageEvent) => {
+      if (this.disposed || !this.isInteractiveMode || e.key !== K.input(this.projectId) || !e.newValue) return;
+      try {
+        const { data } = JSON.parse(e.newValue);
+        for (let i = 0; i < data.length; i++) this.emulator?.serial0_send(data[i]);
+      } catch (_) {}
+    };
+    window.addEventListener('storage', inputListener);
+    this.storageListener = inputListener;
+
+    const emit = (status: VMStatus) => { onStatus(status); this.setStatus(status); };
 
     try {
-      onStatus('initializing');
+      emit('initializing');
 
-      // 1. Fire off OS asset fetches in parallel, fully deduplicated across instances
+      // Heartbeat: re-write status every 1.5s so clients that load mid-boot catch up
+      this.heartbeatInterval = setInterval(() => {
+        if (this.disposed || this.isInteractiveMode) return;
+        this.setStatus(this.currentStatus);
+      }, 1500);
+
       const osFetchPromise = Promise.all([
-        fetchAssetWithCache("/v86-assets/v86/bios/seabios.bin", false),
-        fetchAssetWithCache("/v86-assets/v86/bios/vgabios.bin", false),
-        fetchAssetWithCache("/i-copy-sh/buildroot-bzimage.bin", false)
+        fetchAssetWithCache('/v86-assets/v86/bios/seabios.bin', false),
+        fetchAssetWithCache('/v86-assets/v86/bios/vgabios.bin', false),
+        fetchAssetWithCache('/i-copy-sh/buildroot-bzimage.bin', false),
       ]);
 
-      // 2. Fire off Manifest & Baseline fetches in parallel with OS boot
       let manifestPromise: Promise<any> | null = null;
       let baselinePromise: Promise<Uint8Array> | null = null;
-      
       if (manifestUrl) {
         manifestPromise = fetchAssetWithCache(manifestUrl, false).then(data => {
-           const text = new TextDecoder().decode(data);
-           const m = JSON.parse(text);
-           if (onManifest) onManifest(m);
-           return m;
+          const m = JSON.parse(new TextDecoder().decode(data));
+          if (onManifest) onManifest(m); return m;
         });
-
-        if (baselineUrl) {
-           baselinePromise = fetchAssetWithCache(baselineUrl, false);
-        }
+        if (baselineUrl) baselinePromise = fetchAssetWithCache(baselineUrl, false);
       }
 
-      onStatus('booting_kernel');
-
+      emit('booting_kernel');
       const [biosData, vgabiosData, bzimageData] = await osFetchPromise;
+      if (this.disposed) return;
 
-      // Boot a lightweight Buildroot Linux via v86
       this.emulator = new V86({
-        wasm_fn: async (imports) => {
-          if (!globalWasmModulePromise) {
-            globalWasmModulePromise = WebAssembly.compileStreaming(fetch(wasmURL)).catch(async () => {
-              const res = await fetch(wasmURL);
-              return WebAssembly.compile(await res.arrayBuffer());
-            });
-          }
-          const module = await globalWasmModulePromise;
-          const instance = await WebAssembly.instantiate(module, imports);
-          return instance.exports;
+        wasm_fn: async (imports: any) => {
+          const module = await getWasmModule();
+          return (await WebAssembly.instantiate(module, imports)).exports;
         },
-        memory_size: 256 * 1024 * 1024,
-        vga_memory_size: 8 * 1024 * 1024,
+        memory_size: 256 * 1024 * 1024, vga_memory_size: 8 * 1024 * 1024,
         bios: { buffer: biosData.buffer as ArrayBuffer },
         vga_bios: { buffer: vgabiosData.buffer as ArrayBuffer },
         bzimage: { buffer: bzimageData.buffer as ArrayBuffer },
-        filesystem: {}, // Enable 9p filesystem
-        cmdline: "tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0",
-        autostart: true,
-        disable_keyboard: true,
-        disable_mouse: true,
-        disable_speaker: true
+        filesystem: {},
+        cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0',
+        autostart: true, disable_keyboard: true, disable_mouse: true, disable_speaker: true,
       });
-      (window as any).vm = this;
+      this.emulator.add_listener('serial0-output-byte', this.consoleOut);
 
-      this.emulator.add_listener("serial0-output-byte", this.consoleOut);
-
-      // Wait for the boot to finish and prompt to appear
-      await new Promise<void>((resolve) => {
-        const interval = setInterval(() => {
-          if (this.outputBuffer.includes("Welcome to Buildroot") || this.outputBuffer.endsWith("# ") || this.outputBuffer.endsWith("% ")) {
-            clearInterval(interval);
-            resolve();
-          }
+      await new Promise<void>(resolve => {
+        const iv = setInterval(() => {
+          if (this.disposed) { clearInterval(iv); resolve(); return; }
+          if (this.outputBuffer.includes('Welcome to Buildroot') ||
+              this.outputBuffer.endsWith('# ') || this.outputBuffer.endsWith('% '))
+            { clearInterval(iv); resolve(); }
         }, 500);
       });
+      if (this.disposed) return;
 
       await new Promise(r => setTimeout(r, 1000));
-      
-      // 1. Silent Mode Initialization
-      await this.execWait("stty -echo");
-      await this.execWait("mkdir -p /home/swacn && cd /home/swacn");
-      // Mount the 9p share if not already auto-mounted by the kernel
-      // (buildroot auto-mounts when filesystem:{} is set in v86 config)
-      const mountOut = await this.execWait("mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/");
-      if (mountOut) console.log("[V86VM] mount output:", mountOut);
+      await this.execWait('stty -echo');
+      await this.execWait('mkdir -p /home/swacn && cd /home/swacn');
+      const mountOut = await this.execWait('mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/');
+      if (mountOut) console.log('[V86VM] mount:', mountOut);
 
       let manifestEnv: Record<string, string> = {};
-
       if (manifestPromise) {
         const manifest = await manifestPromise;
         manifestEnv = manifest.env ?? manifest.environment?.env ?? {};
-
         if (manifest.baseline && baselinePromise) {
-          onStatus('downloading_baseline');
+          emit('downloading_baseline');
           try {
-            // Await the baseline data which was likely already downloading in parallel with the OS boot
-            const baselineData = await baselinePromise;
-            
-            onStatus('extracting_baseline');
-            // Inject directly into the v86 9p share (mounted at /mnt/ inside the VM)
-            this.emulator?.create_file('baseline.tar.gz', baselineData);
-            
-            // Remove -m flag as busybox tar doesn't support it
-            const tarOut = await this.execWait(`zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn`);
-            console.log("[V86VM] tar output:", tarOut);
-            await this.execWait(`rm /mnt/baseline.tar.gz`);
-          } catch (err) {
-            console.error("Failed to download baseline", err);
-          }
+            const bd = await baselinePromise; emit('extracting_baseline');
+            this.emulator?.create_file('baseline.tar.gz', bd);
+            await this.execWait('zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn');
+            await this.execWait('rm /mnt/baseline.tar.gz');
+          } catch (err) { console.error('[V86VM] baseline failed', err); }
         }
-
-        // Read from manifest.binaries using x86_32 target convention (with legacy i386/x86_64 fallback)
-        const binariesList = manifest.binaries?.x86_32 ?? manifest.environment?.binaries?.x86_32 ??
-                             manifest.binaries?.i386 ?? manifest.environment?.binaries?.i386 ?? 
-                             manifest.binaries?.x86_64 ?? manifest.environment?.binaries?.x86_64 ?? [];
-        
-        if (binariesList.length > 0) {
-          onStatus('downloading_tools');
+        const bins = manifest.binaries?.x86_32 ?? manifest.environment?.binaries?.x86_32 ??
+                     manifest.binaries?.i386   ?? manifest.environment?.binaries?.i386   ??
+                     manifest.binaries?.x86_64 ?? manifest.environment?.binaries?.x86_64 ?? [];
+        if (bins.length > 0) {
+          emit('downloading_tools');
           try {
-            // OPTIMIZATION: Download all tools in parallel
-            const downloadPromises = binariesList.map(async (tool: any) => {
-              const data = await fetchAssetWithCache(tool.url);
-              return { tool, data };
-            });
-            
-            const results = await Promise.all(downloadPromises);
-            
-            onStatus('installing_tools');
-            // Installation must be sequential because it interacts with the VM serial port
+            const results = await Promise.all(bins.map(async (t: any) => ({ tool: t, data: await fetchAssetWithCache(t.url) })));
+            emit('installing_tools');
             for (const { tool, data } of results) {
-              const filename = tool.url.split('/').pop() || 'tool';
-              
-              // Smart path resolution:
-              // 1. If no path, use /usr/bin/name
-              // 2. If path is a directory (doesn't end with name), append name
-              // 3. If path is a full file path (ends with name), use as is
-              let installPath = tool.install_path || '/usr/bin';
-              if (!installPath.endsWith(tool.name)) {
-                installPath = installPath.endsWith('/') ? `${installPath}${tool.name}` : `${installPath}/${tool.name}`;
-              }
-
-              console.log(`[V86VM] Installing ${tool.name} to ${installPath}`);
-              this.emulator?.create_file(filename, data);
-              
-              await this.execWait(`mkdir -p ${installPath.substring(0, installPath.lastIndexOf('/'))}`);
-              const cpOut = await this.execWait(`cp /mnt/${filename} ${installPath}`);
-              if (cpOut) console.log(`[V86VM] cp ${filename} output:`, cpOut);
-              await this.execWait(`chmod +x ${installPath}`);
-              await this.execWait(`rm /mnt/${filename}`);
+              const fn = tool.url.split('/').pop() || 'tool';
+              let ip = tool.install_path || '/usr/bin';
+              if (!ip.endsWith(tool.name)) ip = ip.endsWith('/') ? `${ip}${tool.name}` : `${ip}/${tool.name}`;
+              this.emulator?.create_file(fn, data);
+              await this.execWait(`mkdir -p ${ip.substring(0, ip.lastIndexOf('/'))}`);
+              await this.execWait(`cp /mnt/${fn} ${ip}`);
+              await this.execWait(`chmod +x ${ip}`);
+              await this.execWait(`rm /mnt/${fn}`);
             }
-          } catch (err) {
-            console.error("Failed to download or install tools", err);
-          }
+          } catch (err) { console.error('[V86VM] tools failed', err); }
         }
       }
 
-      // --- THE CLEAN HANDOVER ---
-
-      console.log("[V86VM] Capturing welcome message");
-      // 1. Capture welcome message (only meaningful if manifest was loaded)
-      const welcomeContent = manifestUrl 
-        ? await this.execWait("cat welcome.txt 2>/dev/null")
-        : null;
-      console.log("[V86VM] Welcome message captured:", welcomeContent);
-
-      if (!this.emulator) return;
-
-      console.log("[V86VM] Configuring shell environment");
-      // 2. Write env vars to /etc/profile.d so they persist in all shells
+      const welcome = manifestUrl ? await this.execWait('cat welcome.txt 2>/dev/null') : null;
       if (Object.keys(manifestEnv).length > 0) {
-        await this.execWait(`mkdir -p /etc/profile.d && rm -f /etc/profile.d/swacn.sh`);
-        for (const [key, value] of Object.entries(manifestEnv)) {
-          await this.execWait(`echo 'export ${key}="${value}"' >> /etc/profile.d/swacn.sh`);
-        }
-        await this.execWait(`. /etc/profile.d/swacn.sh`);
+        await this.execWait('mkdir -p /etc/profile.d && rm -f /etc/profile.d/swacn.sh');
+        for (const [k, v] of Object.entries(manifestEnv))
+          await this.execWait(`echo 'export ${k}="${v}"' >> /etc/profile.d/swacn.sh`);
+        await this.execWait('. /etc/profile.d/swacn.sh');
       }
-
-      // Set PS1 and terminal size before enabling echo — fully silent
       await this.execWait("export PS1='swacn@sandbox:~$ '");
       await this.execWait(`stty cols ${this.xterm.cols} rows ${this.xterm.rows}`);
-      await this.execWait("stty echo");
-
-      // Drain any remaining in-flight v86 serial bytes into outputBuffer
+      await this.execWait('stty echo');
       await new Promise(r => setTimeout(r, 300));
 
-      console.log("[V86VM] Wiping visual terminal");
-      // Clear BEFORE switching to interactive mode — stty -echo is still on
-      // so no shell output can leak to xterm here
+      if (this.heartbeatInterval) { clearInterval(this.heartbeatInterval); this.heartbeatInterval = null; }
+
       this.xterm.clear();
+      const PROMPT = 'swacn@sandbox:~$ ';
+      const initial = (welcome?.trim()) ? welcome.trim() + '\r\n\r\n' + PROMPT : PROMPT;
+      this.xterm.write(initial);
 
-      console.log("[V86VM] Handover");
-      const PROMPT = "swacn@sandbox:~$ ";
-
-      if (welcomeContent && welcomeContent.trim().length > 0) {
-        this.xterm.write(welcomeContent.trim() + "\r\n\r\n" + PROMPT);
-      } else if (!manifestUrl) {
-        this.xterm.write(PROMPT);
-      } else {
-        this.xterm.write(PROMPT);
-      }
-
-      // Switch to interactive mode — NO serial send.
-      // Shell is idle and waiting. User's first keypress drives it from here.
       this.isInteractiveMode = true;
-
-
-      // 6. Hook up the listener
-      this.dataListener = this.xterm.onData((data) => {
+      this.xtermDataListener = this.xterm.onData(data => {
         if (!this.isInteractiveMode || !this.emulator) return;
-        this.emulator?.serial0_send(data);
+        this.emulator.serial0_send(data);
       });
 
-      console.log("[V86VM] Boot sequence complete!");
-      onStatus('ready');
-    } catch (e: any) {
-      if (e.name === 'AbortError') return;
-      console.error("[V86VM] Boot failed!", e);
-      onStatus('error');
+      // Tell clients: clear, write initial output, mark ready
+      this.broadcastOutput({ type: 'clear' });
+      this.broadcastOutput({ type: 'ready', data: initial });
+      emit('ready');
+
+    } catch (err: any) {
+      console.error('[V86VM] Boot failed', err);
+      onStatus('error'); this.setStatus('error');
     }
   }
 
   public setTerminalSize(cols?: number, rows?: number) {
     if (!this.emulator || !this.isInteractiveMode) return;
-    const c = cols ?? this.xterm.cols;
-    const r = rows ?? this.xterm.rows;
-    // Update the VM's shell about the new terminal size
-    // Note: Sending stty commands over the raw serial port while the user is interacting
-    // will pollute their prompt and break any command they are currently typing.
-    // Since raw serial doesn't support out-of-band SIGWINCH signals like a true PTY,
-    // we must rely on xterm.js for visual wrapping during dynamic resizes.
-    
-    /*
+    const c = cols ?? this.xterm.cols, r = rows ?? this.xterm.rows;
     const cmd = ` stty -echo; stty cols ${c} rows ${r}; stty echo\n`;
-    for (let i = 0; i < cmd.length; i++) {
-      this.emulator.serial0_send(cmd[i]);
-    }
-    */
+    for (let i = 0; i < cmd.length; i++) this.emulator.serial0_send(cmd[i]);
   }
 
   public dispose() {
-    if (this.abortController) this.abortController.abort();
-    if (this.dataListener) this.dataListener.dispose();
-    if (this.emulator) this.emulator.stop();
-    this.emulator = null;
+    this.disposed = true;
+    if (this.heartbeatInterval) { clearInterval(this.heartbeatInterval); this.heartbeatInterval = null; }
+    if (this.outputFlushTimer) { clearTimeout(this.outputFlushTimer); this.outputFlushTimer = null; }
+    if (this.storageListener) { window.removeEventListener('storage', this.storageListener); this.storageListener = null; }
+    this.xtermDataListener?.dispose();
+    if (this.role === 'master') {
+      localStorage.removeItem(K.master(this.projectId));
+      localStorage.removeItem(K.status(this.projectId));
+      if (this.emulator) this.emulator.stop();
+      this.emulator = null;
+      this.disposeResolve?.();
+    }
   }
 }
