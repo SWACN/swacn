@@ -4,10 +4,8 @@
 CREATE TABLE enterprises (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    learner_seats_total INT DEFAULT 0,
-    learner_seats_used INT DEFAULT 0,
-    creator_seats_total INT DEFAULT 0,
-    creator_seats_used INT DEFAULT 0,
+    pro_seats_total INT DEFAULT 0,
+    pro_seats_used INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -17,7 +15,7 @@ CREATE TABLE enterprise_domains (
     id SERIAL PRIMARY KEY,
     enterprise_id INT REFERENCES enterprises(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL, -- e.g., 'google.com'
-    assign_role VARCHAR(50) NOT NULL CHECK (assign_role IN ('learner', 'creator')),
+    assign_role VARCHAR(50) NOT NULL CHECK (assign_role IN ('pro')),
     UNIQUE(enterprise_id, domain)
 );
 
@@ -33,16 +31,11 @@ CREATE TABLE users (
     -- Roles and Tiers
     is_super_admin BOOLEAN DEFAULT FALSE,
     is_admin BOOLEAN DEFAULT FALSE,       -- Can manage their Enterprise
-    is_creator BOOLEAN DEFAULT FALSE,     -- Can make Super Projects
-    is_learner BOOLEAN DEFAULT FALSE,     -- Gets 50GB quota, can import projects
+    is_pro BOOLEAN DEFAULT FALSE,         -- can import projects, can make Super Projects
     
     -- Enterprise Relation
     enterprise_id INT REFERENCES enterprises(id) ON DELETE SET NULL,
     enterprise_email VARCHAR(255) UNIQUE, -- Tracks the exact email used to claim the seat
-    
-    -- Quotas (for Learners)
-    internet_quota_bytes BIGINT DEFAULT 0, -- e.g., 53687091200 for 50GB
-    quota_reset_date TIMESTAMP,
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -57,7 +50,7 @@ CREATE TABLE projects (
     
     is_super_project BOOLEAN DEFAULT FALSE,
     
-    -- For Learners importing projects
+    -- For Pro users importing projects
     forked_from_project_id INT REFERENCES projects(id) ON DELETE SET NULL,
     
     -- Saved state of the VM for this project

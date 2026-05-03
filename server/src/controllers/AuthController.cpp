@@ -141,7 +141,7 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
                             
                             // TODO: (Future Enterprise Logic)
                             // Here you can match `current_email` domain against the `enterprises` table.
-                            // If it matches an enterprise domain, assign them the learner/creator role!
+                            // If it matches an enterprise domain, assign them the pro role!
                             
                             if (em.isMember("primary") && em["primary"].asBool()) {
                                 final_email = current_email;
