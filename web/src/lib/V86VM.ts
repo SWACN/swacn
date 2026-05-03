@@ -17,6 +17,7 @@ const K = {
   status:  (id: string) => `swacn_vm_status_${id}`,
   output:  (id: string) => `swacn_vm_output_${id}`,
   input:   (id: string) => `swacn_vm_input_${id}`,
+  prompt:  (id: string) => `swacn_vm_prompt_${id}`,  // persists initial prompt for late joiners
 };
 
 // ---------------------------------------------------------------------------
@@ -68,22 +69,43 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
 }
 
 // ---------------------------------------------------------------------------
-// V86VM — master/client via navigator.locks election + localStorage messaging
+// MessageChannel-based async helpers — immune to cross-origin iframe throttling
+// Chrome throttles setTimeout/setInterval in cross-origin iframes (file:// parent,
+// different-origin parent). MessageChannel postMessage fires unthrottled tasks.
 // ---------------------------------------------------------------------------
+function mcSleep(ms: number): Promise<void> {
+  // For > 0ms: use MessageChannel for the first tick, then fall back to
+  // native setTimeout for the bulk of the wait (>10ms isn't meaningfully throttled).
+  // For 0ms / tiny delays: pure MessageChannel.
+  if (ms <= 4) {
+    return new Promise(resolve => { const mc = new MessageChannel(); mc.port2.onmessage = () => resolve(); mc.port1.postMessage(null); });
+  }
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-// NOTE: WebAssembly.Module cannot be stored in IDB or postMessage'd across
-// iframes when COEP:require-corp is active (DataCloneError by design — Spectre
-// mitigation). Each master context compiles its own instance. The .wasm bytes
-// ARE cached in CacheStorage by fetchAssetWithCache, so the network round-trip
-// is eliminated and only the JIT step (~100-200ms) repeats per master.
-//
-// Module-level promise deduplicates concurrent compile requests within one context.
+function mcPoll(check: () => boolean, intervalMs: number): Promise<void> {
+  // Poll `check()` using MessageChannel ticks rather than setInterval.
+  // Each tick posts a message and re-checks on receipt — no throttling.
+  return new Promise(resolve => {
+    const mc = new MessageChannel();
+    const tick = () => {
+      if (check()) { resolve(); return; }
+      setTimeout(() => mc.port1.postMessage(null), intervalMs);
+    };
+    mc.port2.onmessage = tick;
+    mc.port1.postMessage(null);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// WASM module — compiled once per iframe context from CacheStorage-cached bytes.
+// IDB cannot store WebAssembly.Module under COEP:require-corp (DataCloneError).
+// ---------------------------------------------------------------------------
 let wasmModulePromise: Promise<WebAssembly.Module> | null = null;
 
 async function getWasmModule(): Promise<WebAssembly.Module> {
   if (wasmModulePromise) return wasmModulePromise;
   wasmModulePromise = (async () => {
-    // Fetch bytes via our asset cache (CacheStorage) — no network if already cached
     const bytes = await fetchAssetWithCache(wasmURL, false);
     console.log('[V86VM] WASM module: compiling from cached bytes...');
     const module = await WebAssembly.compile(bytes.buffer as ArrayBuffer);
@@ -93,6 +115,35 @@ async function getWasmModule(): Promise<WebAssembly.Module> {
   return wasmModulePromise;
 }
 
+// ---------------------------------------------------------------------------
+// Tab-scoped ID — same for all same-origin iframes within one browsing tab,
+// different for different tabs. Used to scope master election and the relay
+// SharedWorker so each tab elects its OWN master independently.
+//
+// For same-origin iframes: window.parent is the shared root — we read/write
+// __swacnTabId on it. For top-level windows: use the window itself.
+// For cross-origin parents: accessing window.parent throws — fall back to a
+// per-window ID (each iframe becomes its own mini-master, relay still works).
+// ---------------------------------------------------------------------------
+function getTabScopeId(): string {
+  if (window.self === window.top) {
+    // Top-level tab: assign an ID to this window
+    if (!(window as any).__swacnTabId) (window as any).__swacnTabId = Math.random().toString(36).slice(2, 10);
+    return (window as any).__swacnTabId as string;
+  }
+  try {
+    // Same-origin iframe: derive ID from the parent window.
+    // All iframes on the same page share window.parent → same ID → same master.
+    const parent: any = window.parent;
+    if (!parent.__swacnTabId) parent.__swacnTabId = Math.random().toString(36).slice(2, 10);
+    return parent.__swacnTabId as string;
+  } catch {
+    // Cross-origin parent (file://, different-domain): can't access parent.
+    // Return '' so all same-origin cross-origin-embedded iframes share a
+    // single GLOBAL master lock for each project (1 VM, not N).
+    return '';
+  }
+}
 
 export class V86VM {
   private xterm: Terminal;
@@ -114,6 +165,9 @@ export class V86VM {
   // Client state
   private xtermDataListener: { dispose: () => void } | null = null;
   private storageListener: ((e: StorageEvent) => void) | null = null;
+  // SharedWorker relay port — low-latency IPC for real-time input/output.
+  // Falls back to localStorage-only if SharedWorker is unavailable.
+  private relayPort: MessagePort | null = null;
 
   constructor(xterm: Terminal, projectId: string) {
     this.xterm = xterm;
@@ -129,16 +183,33 @@ export class V86VM {
     manifestUrl: string | null, baselineUrl: string | null,
     onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
   ) {
-    // Yield to the event loop BEFORE requesting the lock.
-    // React Strict Mode runs effect → cleanup → effect in quick succession.
-    // This pause lets the cleanup (dispose) run, so render #1 sees disposed=true
-    // and exits here — leaving render #2 to request the lock uncontested.
-    await new Promise(r => setTimeout(r, 0));
+    // Yield one microtask tick before requesting the lock.
+    // React Strict Mode runs effect → cleanup → effect synchronously.
+    // queueMicrotask resolves after the current synchronous block but before
+    // any pending tasks — Strict Mode's cleanup (dispose) runs in the same
+    // synchronous block, so render #1 will see disposed=true here and exit.
+    // Unlike setTimeout(0), this has ~zero actual delay in a busy event loop.
+    await new Promise(r => queueMicrotask(r as () => void));
     if (this.disposed) return;
 
-    // Use only navigator.locks for election — it is session-scoped and never
-    // goes stale (unlike localStorage which persists across page loads).
-    navigator.locks.request(`swacn-vm-master-${this.projectId}`, { ifAvailable: true }, async (lock) => {
+    // Connect to SharedWorker relay for low-latency IPC.
+    // Scoped by projectId + tabId so each tab gets its own isolated broadcast group.
+    // Different tabs → different SharedWorker instances → no cross-tab interference.
+    const tabId = getTabScopeId();
+    try {
+      const sw = new SharedWorker(
+        `/relay.worker.js?p=${encodeURIComponent(this.projectId)}&t=${tabId}`
+      );
+      sw.port.start();
+      this.relayPort = sw.port;
+    } catch (e) {
+      console.warn('[V86VM] SharedWorker unavailable, falling back to localStorage IPC:', e);
+    }
+
+    // Scope the master lock to the current tab (tabId) so each tab elects
+    // its own master independently — main site tab and embed-test.html tab
+    // don't compete and don't relay input/output across tabs.
+    navigator.locks.request(`swacn-vm-master-${this.projectId}-${tabId}`, { ifAvailable: true }, async (lock) => {
       if (this.disposed) return;
 
       if (!lock) {
@@ -152,7 +223,8 @@ export class V86VM {
       this.role = 'master';
       // Wipe stale keys from any previous session before writing fresh state
       [K.master(this.projectId), K.status(this.projectId),
-       K.output(this.projectId), K.input(this.projectId)].forEach(k => localStorage.removeItem(k));
+       K.output(this.projectId), K.input(this.projectId),
+       K.prompt(this.projectId)].forEach(k => localStorage.removeItem(k));
       localStorage.setItem(K.master(this.projectId), 'alive');
 
       await this.runAsMaster(manifestUrl, baselineUrl, onStatus, onManifest);
@@ -166,51 +238,91 @@ export class V86VM {
   // ── CLIENT ────────────────────────────────────────────────────────────────
 
   private runAsClient(onStatus: (s: VMStatus) => void) {
-    console.log('[V86VM] Running as client (localStorage mode)');
+    console.log('[V86VM] Running as client');
 
-    // Immediately apply any status already written by master
-    const existingStatus = localStorage.getItem(K.status(this.projectId));
-    if (existingStatus) {
-      try { onStatus(JSON.parse(existingStatus).status); } catch (_) {}
+    // ── Real-time relay via SharedWorker (fast, ~0.1ms latency) ──────────────
+    if (this.relayPort) {
+      // Send keyboard input directly to master via relay
+      this.xtermDataListener = this.xterm.onData(d =>
+        this.relayPort!.postMessage({ type: 'INPUT', data: d }));
+
+      // Receive output + status from master via relay
+      this.relayPort.onmessage = (e) => {
+        if (this.disposed) return;
+        const msg = e.data;
+        if (msg.type === 'STATUS') { onStatus(msg.status); }
+        else if (msg.type === 'CLEAR') { this.xterm.clear(); }
+        else if (msg.type === 'READY') {
+          if (msg.data) this.xterm.write(msg.data);
+          onStatus('ready');
+        } else if (msg.type === 'DATA') { this.xterm.write(msg.data); }
+      };
+    } else {
+      // ── Fallback: localStorage IPC (SharedWorker unavailable) ──────────────
+      this.xtermDataListener = this.xterm.onData(d =>
+        localStorage.setItem(K.input(this.projectId), JSON.stringify({ seq: Date.now(), data: d })));
+
+      const lsListener = (e: StorageEvent) => {
+        if (this.disposed) return;
+        if (e.key === K.output(this.projectId) && e.newValue) {
+          try {
+            const msg = JSON.parse(e.newValue);
+            if (msg.type === 'clear') { this.xterm.clear(); }
+            else if (msg.type === 'ready') { if (msg.data) this.xterm.write(msg.data); onStatus('ready'); }
+            else if (msg.type === 'data') { this.xterm.write(msg.data); }
+          } catch (_) {}
+        }
+      };
+      this.storageListener = lsListener;
+      window.addEventListener('storage', lsListener);
     }
 
-    const listener = (e: StorageEvent) => {
-      if (this.disposed) return;
-      if (e.key === K.status(this.projectId) && e.newValue) {
-        try { onStatus(JSON.parse(e.newValue).status); } catch (_) {}
-      }
-      if (e.key === K.output(this.projectId) && e.newValue) {
+    // ── Late-join: apply state from localStorage if master already booted ─────
+    // (Works for both relay and fallback paths — relay has no stored state)
+    const masterAlive = localStorage.getItem(K.master(this.projectId)) === 'alive';
+    if (masterAlive) {
+      const stored = localStorage.getItem(K.status(this.projectId));
+      if (stored) {
         try {
-          const msg = JSON.parse(e.newValue);
-          if (msg.type === 'clear') { this.xterm.clear(); }
-          else if (msg.type === 'ready') {
-            if (msg.data) this.xterm.write(msg.data);
-            this.xtermDataListener = this.xterm.onData(data =>
-              localStorage.setItem(K.input(this.projectId),
-                JSON.stringify({ seq: Date.now(), data })));
-            onStatus('ready');
-          } else if (msg.type === 'data') {
-            this.xterm.write(msg.data);
+          const { status } = JSON.parse(stored);
+          onStatus(status);
+          if (status === 'ready') {
+            const p = localStorage.getItem(K.prompt(this.projectId));
+            if (p) { const { data } = JSON.parse(p); this.xterm.clear(); if (data) this.xterm.write(data); }
           }
         } catch (_) {}
       }
-    };
+    }
 
-    this.storageListener = listener;
-    window.addEventListener('storage', listener);
-  }
+    // ── Status updates via localStorage (persisted for late joiners) ──────────
+    const statusListener = (e: StorageEvent) => {
+      if (this.disposed || e.key !== K.status(this.projectId) || !e.newValue) return;
+      try { onStatus(JSON.parse(e.newValue).status); } catch (_) {}
+    };
+    this.storageListener = statusListener;
+    window.addEventListener('storage', statusListener);
+  } // end runAsClient
 
   // ── MASTER ────────────────────────────────────────────────────────────────
 
   private setStatus(status: VMStatus) {
     if (this.disposed) return;
     this.currentStatus = status;
+    // Write to localStorage for late-joiner persistence
     localStorage.setItem(K.status(this.projectId), JSON.stringify({ status }));
+    // Broadcast to live clients via relay (fast)
+    this.relayPort?.postMessage({ type: 'STATUS', status });
   }
 
-  private broadcastOutput(msg: object) {
+  private broadcastOutput(msg: Record<string, unknown>) {
     if (this.disposed) return;
-    localStorage.setItem(K.output(this.projectId), JSON.stringify({ seq: this.outputSeq++, ...msg }));
+    // Relay port: primary fast path
+    this.relayPort?.postMessage({ ...msg, seq: this.outputSeq });
+    // localStorage: fallback for clients without relay (and late-join)
+    if (!this.relayPort) {
+      localStorage.setItem(K.output(this.projectId), JSON.stringify({ seq: this.outputSeq, ...msg }));
+    }
+    this.outputSeq++;
   }
 
   private consoleOut = (byte: number) => {
@@ -221,11 +333,12 @@ export class V86VM {
       // Batch output — flush every 16ms
       this.pendingOutput += char;
       if (!this.outputFlushTimer) {
+        // 4ms flush via MessageChannel — much faster than 16ms setTimeout
         this.outputFlushTimer = setTimeout(() => {
-          if (this.pendingOutput) this.broadcastOutput({ type: 'data', data: this.pendingOutput });
+          if (this.pendingOutput) this.broadcastOutput({ type: 'DATA', data: this.pendingOutput });
           this.pendingOutput = '';
           this.outputFlushTimer = null;
-        }, 16);
+        }, 4);
       }
     } else {
       this.outputBuffer += char;
@@ -255,7 +368,7 @@ export class V86VM {
       for (let i = 0; i < full.length; i++) {
         if (this.disposed) { resolve(''); return; }
         this.emulator?.serial0_send(full[i]);
-        if (i > 0 && i % 64 === 0) await new Promise(r => setTimeout(r, 1));
+        if (i > 0 && i % 64 === 0) await mcSleep(0);
       }
     });
   }
@@ -264,15 +377,23 @@ export class V86VM {
     manifestUrl: string | null, baselineUrl: string | null,
     onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
   ) {
-    console.log('[V86VM] Running as master (localStorage mode)');
+    console.log('[V86VM] Running as master');
 
-    // Listen for keyboard input from clients via localStorage
+    const handleClientInput = (data: string) => {
+      if (this.disposed || !this.isInteractiveMode) return;
+      for (let i = 0; i < data.length; i++) this.emulator?.serial0_send(data[i]);
+    };
+
+    // Primary: relay port (fast, ~0.1ms)
+    if (this.relayPort) {
+      this.relayPort.onmessage = (e) => {
+        if (e.data?.type === 'INPUT') handleClientInput(e.data.data);
+      };
+    }
+    // Fallback: localStorage storage events (for clients without relay)
     const inputListener = (e: StorageEvent) => {
-      if (this.disposed || !this.isInteractiveMode || e.key !== K.input(this.projectId) || !e.newValue) return;
-      try {
-        const { data } = JSON.parse(e.newValue);
-        for (let i = 0; i < data.length; i++) this.emulator?.serial0_send(data[i]);
-      } catch (_) {}
+      if (this.disposed || e.key !== K.input(this.projectId) || !e.newValue) return;
+      try { const { data } = JSON.parse(e.newValue); handleClientInput(data); } catch (_) {}
     };
     window.addEventListener('storage', inputListener);
     this.storageListener = inputListener;
@@ -308,6 +429,30 @@ export class V86VM {
       const [biosData, vgabiosData, bzimageData] = await osFetchPromise;
       if (this.disposed) return;
 
+
+      // Chrome throttles both rAF AND setTimeout in cross-origin iframes
+      // (e.g. file:// parent embedding http://localhost iframes). This kills
+      // V86's emulation tick rate by 7-10x. MessageChannel postMessage fires
+      // tasks WITHOUT any timer throttling policy — same trick React's scheduler
+      // uses internally. We patch window.requestAnimationFrame so V86's entire
+      // emulation loop runs at full native speed inside the iframe.
+      const isEmbedded = window.self !== window.top;
+      if (isEmbedded) {
+        const mc = new MessageChannel();
+        mc.port1.start();
+        mc.port2.start();
+        // Each rAF registration replaces the port2 handler (V86 only has one
+        // pending rAF at a time). cancelAnimationFrame nulls the handler.
+        (window as any).requestAnimationFrame = (cb: FrameRequestCallback): number => {
+          mc.port2.onmessage = () => { mc.port2.onmessage = null; cb(performance.now()); };
+          mc.port1.postMessage(null);
+          return 1; // V86 uses the return value only for cancelAnimationFrame
+        };
+        (window as any).cancelAnimationFrame = (_id: number) => {
+          mc.port2.onmessage = null;
+        };
+      }
+
       this.emulator = new V86({
         wasm_fn: async (imports: any) => {
           const module = await getWasmModule();
@@ -323,35 +468,36 @@ export class V86VM {
       });
       this.emulator.add_listener('serial0-output-byte', this.consoleOut);
 
-      await new Promise<void>(resolve => {
-        const iv = setInterval(() => {
-          if (this.disposed) { clearInterval(iv); resolve(); return; }
-          if (this.outputBuffer.includes('Welcome to Buildroot') ||
-              this.outputBuffer.endsWith('# ') || this.outputBuffer.endsWith('% '))
-            { clearInterval(iv); resolve(); }
-        }, 500);
-      });
+
+      await mcPoll(() =>
+        this.disposed ||
+        this.outputBuffer.includes('Welcome to Buildroot') ||
+        this.outputBuffer.endsWith('# ') ||
+        this.outputBuffer.endsWith('% '), 50);
       if (this.disposed) return;
 
-      await new Promise(r => setTimeout(r, 1000));
-      await this.execWait('stty -echo');
-      await this.execWait('mkdir -p /home/swacn && cd /home/swacn');
-      const mountOut = await this.execWait('mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/');
-      if (mountOut) console.log('[V86VM] mount:', mountOut);
+      // ── Batch initial setup into ONE round-trip ──────────────────────────
+      await this.execWait(
+        'stty -echo; mkdir -p /home/swacn; cd /home/swacn; ' +
+        'mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/'
+      );
 
       let manifestEnv: Record<string, string> = {};
       if (manifestPromise) {
         const manifest = await manifestPromise;
         manifestEnv = manifest.env ?? manifest.environment?.env ?? {};
+
         if (manifest.baseline && baselinePromise) {
           emit('downloading_baseline');
           try {
-            const bd = await baselinePromise; emit('extracting_baseline');
+            const bd = await baselinePromise;
+            emit('extracting_baseline');
             this.emulator?.create_file('baseline.tar.gz', bd);
-            await this.execWait('zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn');
-            await this.execWait('rm /mnt/baseline.tar.gz');
+            // Combine extract + cleanup into one round-trip
+            await this.execWait('zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn; rm /mnt/baseline.tar.gz');
           } catch (err) { console.error('[V86VM] baseline failed', err); }
         }
+
         const bins = manifest.binaries?.x86_32 ?? manifest.environment?.binaries?.x86_32 ??
                      manifest.binaries?.i386   ?? manifest.environment?.binaries?.i386   ??
                      manifest.binaries?.x86_64 ?? manifest.environment?.binaries?.x86_64 ?? [];
@@ -364,27 +510,28 @@ export class V86VM {
               const fn = tool.url.split('/').pop() || 'tool';
               let ip = tool.install_path || '/usr/bin';
               if (!ip.endsWith(tool.name)) ip = ip.endsWith('/') ? `${ip}${tool.name}` : `${ip}/${tool.name}`;
+              const dir = ip.substring(0, ip.lastIndexOf('/'));
               this.emulator?.create_file(fn, data);
-              await this.execWait(`mkdir -p ${ip.substring(0, ip.lastIndexOf('/'))}`);
-              await this.execWait(`cp /mnt/${fn} ${ip}`);
-              await this.execWait(`chmod +x ${ip}`);
-              await this.execWait(`rm /mnt/${fn}`);
+              // All 4 ops in one round-trip: mkdir + cp + chmod + rm
+              await this.execWait(`mkdir -p ${dir}; cp /mnt/${fn} ${ip}; chmod +x ${ip}; rm /mnt/${fn}`);
             }
           } catch (err) { console.error('[V86VM] tools failed', err); }
         }
       }
 
       const welcome = manifestUrl ? await this.execWait('cat welcome.txt 2>/dev/null') : null;
-      if (Object.keys(manifestEnv).length > 0) {
-        await this.execWait('mkdir -p /etc/profile.d && rm -f /etc/profile.d/swacn.sh');
-        for (const [k, v] of Object.entries(manifestEnv))
-          await this.execWait(`echo 'export ${k}="${v}"' >> /etc/profile.d/swacn.sh`);
-        await this.execWait('. /etc/profile.d/swacn.sh');
-      }
-      await this.execWait("export PS1='swacn@sandbox:~$ '");
-      await this.execWait(`stty cols ${this.xterm.cols} rows ${this.xterm.rows}`);
-      await this.execWait('stty echo');
-      await new Promise(r => setTimeout(r, 300));
+
+      // ── Batch env vars + PS1 + stty into ONE round-trip ──────────────────
+      const envSetup = Object.entries(manifestEnv).length > 0
+        ? `mkdir -p /etc/profile.d; printf '${
+            Object.entries(manifestEnv).map(([k, v]) => `export ${k}="${v}"`).join('\\n')
+          }\\n' > /etc/profile.d/swacn.sh; . /etc/profile.d/swacn.sh; `
+        : '';
+      await this.execWait(
+        `${envSetup}export PS1='swacn@sandbox:~$ '; stty cols ${this.xterm.cols} rows ${this.xterm.rows}; stty echo`
+      );
+      await mcSleep(100);
+
 
       if (this.heartbeatInterval) { clearInterval(this.heartbeatInterval); this.heartbeatInterval = null; }
 
@@ -400,8 +547,10 @@ export class V86VM {
       });
 
       // Tell clients: clear, write initial output, mark ready
-      this.broadcastOutput({ type: 'clear' });
-      this.broadcastOutput({ type: 'ready', data: initial });
+      this.broadcastOutput({ type: 'CLEAR' });
+      this.broadcastOutput({ type: 'READY', data: initial });
+      // Persist prompt for late-joining clients (those that connect after boot completes)
+      localStorage.setItem(K.prompt(this.projectId), JSON.stringify({ data: initial }));
       emit('ready');
 
     } catch (err: any) {
