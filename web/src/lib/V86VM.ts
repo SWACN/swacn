@@ -358,13 +358,19 @@ export class V86VM {
     if (!this.worker || this.disposed) return '';
     this.outputBuffer = '';
     const nonce = Math.random().toString(36).substring(2, 10);
-    this.currentMarker = `__SWACN_${nonce}__`;
+    const startMarker = `__S${nonce}__`;
+    const endMarker = `__E${nonce}__`;
+    this.currentMarker = endMarker;
     return new Promise<string>(async resolve => {
       this.resolveCommand = () => {
-        const out = this.outputBuffer.split(this.currentMarker || '')[0].replace(cmd, '').trim();
+        const parts = this.outputBuffer.split(startMarker);
+        if (parts.length < 2) { 
+          this.currentMarker = null; resolve(''); return; 
+        }
+        const out = parts[1].split(endMarker)[0].trim();
         this.currentMarker = null; resolve(out);
       };
-      const full = `${cmd} ; printf "${this.currentMarker}"\n`;
+      const full = `printf "${startMarker}"; ${cmd}; printf "${endMarker}"\n`;
       for (let i = 0; i < full.length; i += 64) {
         if (this.disposed) { resolve(''); return; }
         const chunk = full.substring(i, i + 64);
@@ -388,7 +394,9 @@ export class V86VM {
     // Primary: relay port (fast, ~0.1ms)
     if (this.relayPort) {
       this.relayPort.onmessage = (e) => {
+        if (this.disposed) return;
         if (e.data?.type === 'INPUT') handleClientInput(e.data.data);
+        else if (e.data?.type === 'RESIZE') this.setTerminalSize(e.data.cols, e.data.rows);
       };
     }
     // Fallback: localStorage storage events (for clients without relay)
@@ -456,7 +464,8 @@ export class V86VM {
       // ── Batch initial setup into ONE round-trip ──────────────────────────
       await this.execWait(
         'stty -echo; mkdir -p /home/swacn; cd /home/swacn; ' +
-        'mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/'
+        'mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/; ' +
+        '(while true; do if [ -f /mnt/winsize ]; then stty $(cat /mnt/winsize) < /dev/ttyS0 2>/dev/null; rm /mnt/winsize; fi; sleep 0.5; done &) '
       );
 
       let manifestEnv: Record<string, string> = {};
@@ -537,10 +546,18 @@ export class V86VM {
   }
 
   public setTerminalSize(cols?: number, rows?: number) {
+    if (this.role === 'client' && this.relayPort) {
+      this.relayPort.postMessage({ type: 'RESIZE', cols, rows });
+      return;
+    }
     if (!this.worker || !this.isInteractiveMode) return;
     const c = cols ?? this.xterm.cols, r = rows ?? this.xterm.rows;
-    const cmd = ` stty -echo; stty cols ${c} rows ${r}; stty echo\n`;
-    this.worker.postMessage({ type: 'SERIAL_SEND', payload: { data: cmd } });
+
+    // Use a side-channel via the 9p filesystem to set terminal size.
+    // This avoids injecting 'stty' commands into the user's serial input stream,
+    // which previously corrupted the shell's line buffer and broke backspace.
+    const data = new TextEncoder().encode(`cols ${c} rows ${r}`);
+    this.worker.postMessage({ type: 'CREATE_FILE', payload: { name: 'winsize', data } });
   }
 
   public dispose() {
