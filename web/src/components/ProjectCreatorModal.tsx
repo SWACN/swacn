@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SquareTerminal, XCircle } from 'lucide-react';
-import { getAuthToken, fetchCasts } from '../lib/api';
+import { getAuthToken, fetchCasts, fetchCastDetails } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 
 interface Props {
@@ -24,13 +24,21 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
   React.useEffect(() => {
     if (isOpen && editCastId) {
+      fetchCastDetails(editCastId)
+        .then(details => {
+          setCreateProjectName(prev => prev || details.name || '');
+        })
+        .catch(err => console.error("Failed to fetch cast details for edit", err));
+
       fetch(`/uploads/${editCastId}/manifest.json`)
         .then(res => res.json())
         .then(data => {
-          setCreateProjectName(data.environment?.project || '');
-          const env = data.environment?.env || {};
+          setCreateProjectName(prev => prev || data.project || data.environment?.project || '');
+          const env = data.env || data.environment?.env || {};
           setCreateEnvVars(Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n'));
-          const binaries = data.environment?.binaries?.x86_32 || [];
+          const binaries = data.binaries?.x86_32 || data.environment?.binaries?.x86_32 || 
+                           data.binaries?.i386 || data.environment?.binaries?.i386 || 
+                           data.binaries?.x86_64 || data.environment?.binaries?.x86_64 || [];
           setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
           setExistingBaseline(data.baseline || null);
           setExistingRecording(data.recording || null);
