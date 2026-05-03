@@ -28,12 +28,12 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
     std::string like_pattern = uuid + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT title FROM casts WHERE manifest_url LIKE $1",
+        "SELECT name as title FROM projects WHERE manifest_url LIKE $1",
         [callback, url, uuid](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k404NotFound);
-                resp->setBody("Cast not found");
+                resp->setBody("Project not found");
                 callback(resp);
                 return;
             }

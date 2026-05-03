@@ -28,7 +28,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
             int user_id = r[0]["id"].as<int>();
 
             dbClient->execSqlAsync(
-                "SELECT COUNT(*) FROM casts WHERE user_id = $1 AND deleted_at IS NULL",
+                "SELECT COUNT(*) FROM projects WHERE user_id = $1 AND deleted_at IS NULL",
                 [req, callback, dbClient, user_id](const drogon::orm::Result& r_count) {
                     int count = r_count[0][0].as<int>();
                     if (count >= 15) {
@@ -123,24 +123,39 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                         // Ignore parsing errors
                     }
 
-                    // 5. Update Database utilizing NULLIF for the empty string fallback
+                    // 5. Insert Project and Cast utilizing NULLIF
                     dbClient->execSqlAsync(
-                        "INSERT INTO casts (user_id, title, manifest_url, baseline_url, recording_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, ''), NULLIF($5, ''), $6, $7, $8)",
-                        [callback, cast_uuid](const drogon::orm::Result& res) {
+                        "INSERT INTO projects (user_id, name, manifest_url, baseline_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, COALESCE(NULLIF($2, ''), 'Untitled Project'), $3, NULLIF($4, ''), $5, $6, $7) RETURNING id",
+                        [callback, cast_uuid, user_id, title, recording_val, dbClient](const drogon::orm::Result& res) {
+                            int project_id = res[0]["id"].as<int>();
                             
-                            const char* env_url = getenv("APP_URL");
-                            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
-                            
-                            if (!base_url.empty() && base_url.back() == '/') {
-                                base_url.pop_back();
-                            }
+                            dbClient->execSqlAsync(
+                                "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))",
+                                [callback, cast_uuid](const drogon::orm::Result& res2) {
+                                    const char* env_url = getenv("APP_URL");
+                                    std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                    
+                                    if (!base_url.empty() && base_url.back() == '/') {
+                                        base_url.pop_back();
+                                    }
 
-                            Json::Value ret;
-                            ret["status"] = "success";
-                            ret["cast_id"] = cast_uuid;
-                            ret["url"] = base_url + "/view/" + cast_uuid; 
-                            
-                            callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                                    Json::Value ret;
+                                    ret["status"] = "success";
+                                    ret["cast_id"] = cast_uuid;
+                                    ret["url"] = base_url + "/view/" + cast_uuid; 
+                                    
+                                    callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                                },
+                                [callback](const drogon::orm::DrogonDbException& e) {
+                                    auto resp = drogon::HttpResponse::newHttpResponse();
+                                    resp->setStatusCode(drogon::k500InternalServerError);
+                                    callback(resp);
+                                },
+                                user_id,
+                                project_id,
+                                title,
+                                recording_val
+                            );
                         },
                         [callback](const drogon::orm::DrogonDbException& e) {
                             auto resp = drogon::HttpResponse::newHttpResponse();
@@ -151,7 +166,6 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                         title,
                         cast_uuid + "/manifest.json", 
                         baseline_val, 
-                        recording_val,
                         has_keystrokes,
                         true, // allow_fs_download
                         "dark" // embed_theme
@@ -179,8 +193,9 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     std::string like_pattern = id + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT id, title, manifest_url, baseline_url, recording_url, theme, show_keystrokes, allow_fs_download, embed_theme, created_at "
-        "FROM casts WHERE manifest_url LIKE $1 AND deleted_at IS NULL",
+        "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, "
+        "(SELECT recording_url FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 1) as recording_url "
+        "FROM projects p WHERE p.manifest_url LIKE $1 AND p.deleted_at IS NULL",
         [callback, id](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -192,7 +207,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
             auto const& row = r[0];
             Json::Value castObj;
             castObj["id"] = id;
-            castObj["name"] = row["title"].isNull() ? "" : row["title"].as<std::string>();
+            castObj["name"] = row["name"].isNull() ? "" : row["name"].as<std::string>();
             castObj["has_recording"] = !row["recording_url"].isNull();
             castObj["has_baseline"] = !row["baseline_url"].isNull();
             castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
@@ -239,10 +254,10 @@ void CastController::updateCastSettings(const drogon::HttpRequestPtr& req, std::
 
     // Verify ownership and update in one query using the api_key
     dbClient->execSqlAsync(
-        "UPDATE casts SET theme = $1, show_keystrokes = $2, allow_fs_download = $3, embed_theme = $4 "
+        "UPDATE projects SET theme = $1, show_keystrokes = $2, allow_fs_download = $3, embed_theme = $4 "
         "FROM users "
-        "WHERE casts.user_id = users.id AND users.api_key = $5 AND casts.manifest_url LIKE $6 "
-        "RETURNING casts.id",
+        "WHERE projects.user_id = users.id AND users.api_key = $5 AND projects.manifest_url LIKE $6 "
+        "RETURNING projects.id",
         [callback](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -281,9 +296,10 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
     auto dbClient = drogon::app().getDbClient();
     
     dbClient->execSqlAsync(
-        "SELECT c.id, c.title, c.manifest_url, c.baseline_url, c.recording_url, c.theme, c.show_keystrokes, c.allow_fs_download, c.embed_theme, c.created_at "
-        "FROM casts c JOIN users u ON c.user_id = u.id "
-        "WHERE u.api_key = $1 AND c.deleted_at IS NULL ORDER BY c.created_at DESC",
+        "SELECT p.id, p.name as title, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, "
+        "(SELECT recording_url FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 1) as recording_url "
+        "FROM projects p JOIN users u ON p.user_id = u.id "
+        "WHERE u.api_key = $1 AND p.deleted_at IS NULL ORDER BY p.created_at DESC",
         [callback](const drogon::orm::Result& r) {
             Json::Value casts(Json::arrayValue);
             
@@ -335,10 +351,10 @@ void CastController::deleteCast(const drogon::HttpRequestPtr& req, std::function
     
     // Verify ownership and soft-delete in one query
     dbClient->execSqlAsync(
-        "UPDATE casts SET deleted_at = CURRENT_TIMESTAMP "
+        "UPDATE projects SET deleted_at = CURRENT_TIMESTAMP "
         "FROM users "
-        "WHERE casts.user_id = users.id AND users.api_key = $1 AND casts.manifest_url LIKE $2 AND casts.deleted_at IS NULL "
-        "RETURNING casts.id",
+        "WHERE projects.user_id = users.id AND users.api_key = $1 AND projects.manifest_url LIKE $2 AND projects.deleted_at IS NULL "
+        "RETURNING projects.id",
         [callback, id](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -387,7 +403,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
     
     // First verify ownership
     dbClient->execSqlAsync(
-        "SELECT casts.id FROM casts JOIN users ON casts.user_id = users.id WHERE users.api_key = $1 AND casts.manifest_url LIKE $2 AND casts.deleted_at IS NULL",
+        "SELECT projects.id, projects.user_id FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url LIKE $2 AND projects.deleted_at IS NULL",
         [req, callback, dbClient, id, like_pattern](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -395,6 +411,8 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 callback(resp);
                 return;
             }
+            int project_id = r[0]["id"].as<int>();
+            int user_id = r[0]["user_id"].as<int>();
 
             // Parse Multipart
             drogon::MultiPartParser fileUpload;
@@ -483,20 +501,38 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
 
             // Update Database
             dbClient->execSqlAsync(
-                "UPDATE casts SET title = COALESCE(NULLIF($1, ''), title), baseline_url = COALESCE(NULLIF($2, ''), baseline_url), recording_url = COALESCE(NULLIF($3, ''), recording_url), show_keystrokes = CASE WHEN $6 THEN $4 ELSE show_keystrokes END WHERE manifest_url LIKE $5 RETURNING id",
-                [callback, id](const drogon::orm::Result& res) {
-                    const char* env_url = getenv("APP_URL");
-                    std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
-                    if (!base_url.empty() && base_url.back() == '/') {
-                        base_url.pop_back();
-                    }
-
-                    Json::Value ret;
-                    ret["status"] = "success";
-                    ret["cast_id"] = id;
-                    ret["url"] = base_url + "/view/" + id; 
+                "UPDATE projects SET name = COALESCE(NULLIF($1, ''), name), baseline_url = COALESCE(NULLIF($2, ''), baseline_url), show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END WHERE id = $4",
+                [callback, dbClient, id, project_id, user_id, title, recording_val](const drogon::orm::Result& res) {
                     
-                    callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                    auto returnSuccess = [callback, id]() {
+                        const char* env_url = getenv("APP_URL");
+                        std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                        if (!base_url.empty() && base_url.back() == '/') {
+                            base_url.pop_back();
+                        }
+                        Json::Value ret;
+                        ret["status"] = "success";
+                        ret["cast_id"] = id;
+                        ret["url"] = base_url + "/view/" + id; 
+                        callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                    };
+
+                    if (!recording_val.empty()) {
+                        dbClient->execSqlAsync(
+                            "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), $4)",
+                            [returnSuccess](const drogon::orm::Result& res2) {
+                                returnSuccess();
+                            },
+                            [callback](const drogon::orm::DrogonDbException& e) {
+                                auto resp = drogon::HttpResponse::newHttpResponse();
+                                resp->setStatusCode(drogon::k500InternalServerError);
+                                callback(resp);
+                            },
+                            user_id, project_id, title, recording_val
+                        );
+                    } else {
+                        returnSuccess();
+                    }
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {
                     auto resp = drogon::HttpResponse::newHttpResponse();
@@ -505,9 +541,8 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 },
                 title,
                 baseline_val,
-                recording_val,
                 has_keystrokes,
-                like_pattern,
+                project_id,
                 has_recording
             );
         },

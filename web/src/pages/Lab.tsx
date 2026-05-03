@@ -7,7 +7,7 @@ import * as AsciinemaPlayer from 'asciinema-player';
 import 'asciinema-player/dist/bundle/asciinema-player.css';
 import '@xterm/xterm/css/xterm.css';
 
-import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken, setAuthToken } from '../lib/api';
+import { fetchCasts, fetchCastDetails, updateCastSettings, getAuthToken, setAuthToken, logout } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 import { V86VM, fetchAssetWithCache, VMStatus } from '../lib/V86VM';
 
@@ -94,6 +94,7 @@ export function Lab() {
   const manifestUrl = id ? `/uploads/${id}/manifest.json` : null;
   const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz` : null;
   const recordingUrl = id ? `/uploads/${id}/recording.cast` : null;
+  const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
     fetchCasts().then(setProjects).catch(err => {
@@ -113,8 +114,9 @@ export function Lab() {
       }
     };
 
-    // Listen for BroadcastChannel messages (for popups)
+    // BroadcastChannel: used only for popup-based login handshake
     const authChannel = new BroadcastChannel('swacn_auth');
+    authChannelRef.current = authChannel;
     authChannel.onmessage = (event) => {
       if (event.data?.type === 'SWACN_AUTH' && event.data.token) {
         console.log("[Lab] Auth token received via BroadcastChannel");
@@ -124,24 +126,42 @@ export function Lab() {
       }
     };
 
+    // storage event fires in every OTHER context (iframes, tabs) on the same origin
+    // when localStorage changes — most reliable cross-iframe sync primitive.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'swacn_token') {
+        if (event.newValue) {
+          console.log("[Lab] Token set via storage event");
+          setToken(event.newValue);
+          fetchCasts().then(setProjects).catch(() => {});
+        } else {
+          console.log("[Lab] Token cleared via storage event");
+          setToken(null);
+          setProjects([]);
+        }
+      }
+    };
+
     const handleProjectCreated = () => {
       refreshProjects();
       setIsSidebarOpen(false);
     };
 
     window.addEventListener('message', handleMessage);
+    window.addEventListener('storage', handleStorage);
     window.addEventListener('project-created', handleProjectCreated);
 
     // If we are in an embed and don't have a token, ask the parent for the auth token
     if (isEmbed && !getAuthToken()) {
-      // One-shot request to parent
       window.parent.postMessage({ type: 'SWACN_GET_AUTH' }, '*');
     }
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
       window.removeEventListener('project-created', handleProjectCreated);
       authChannel.close();
+      authChannelRef.current = null;
     };
   }, [isEmbed]);
 
@@ -991,7 +1011,7 @@ export function Lab() {
 
           {/* Elegant Embed Footer */}
           {isEmbed && (
-            <div className={`h-12 border-t-4 flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20 text-[#fcf9f0]' : 'bg-background border-on-surface text-on-surface/70'}`}>
+            <div className={`h-12 border-t-4 flex justify-between items-center px-4 shrink-0 font-mono text-[10px] uppercase font-bold tracking-widest relative z-10 transition-colors duration-300 ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/20 text-[#fcf9f0]/70' : 'bg-background border-on-surface text-on-surface/70'}`}>
                <div className="flex items-center gap-4">
                   {isSandboxMode 
                     ? <span className="flex items-center gap-2 text-primary"><SquareTerminal size={14}/> Live Interactive Sandbox</span> 
@@ -1024,6 +1044,7 @@ export function Lab() {
                             console.log("[Lab] Auth token received via Polling Handshake");
                             setAuthToken(data.token);
                             setToken(data.token);
+                            authChannelRef.current?.postMessage({ type: 'SWACN_AUTH', token: data.token });
                             refreshProjects();
                           }
                         } catch (e) {
@@ -1036,18 +1057,20 @@ export function Lab() {
 
                       window.open(`/api/auth/github/login?popup=true&handshake_id=${handshakeId}`, 'swacn_auth', `width=${width},height=${height},left=${left},top=${top}`);
                     }}
-                    className="flex items-center gap-1.5 text-primary hover:underline transition-all"
+                    className={`flex items-center gap-1.5 transition-all hover:text-primary ${embedTheme === 'dark' ? 'text-[#fcf9f0]/70' : 'text-on-surface/70'}`}
                   >
                     <LogOut size={12} className="rotate-180" /> Sign In
                   </button>
                 ) : (
                   <button 
-                    onClick={() => {
-                      setAuthToken('');
-                      setToken(null);
-                      refreshProjects();
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      logout();        // removes from localStorage → fires storage event in all other iframes
+                      setToken(null);  // update this iframe immediately (storage event doesn't fire for sender)
+                      setProjects([]);
                     }}
-                    className="flex items-center gap-1.5 text-on-surface/50 hover:text-primary transition-all"
+                    className={`flex items-center gap-1.5 transition-all hover:text-primary ${embedTheme === 'dark' ? 'text-[#fcf9f0]/70' : 'text-on-surface/70'}`}
                     title="Log Out"
                   >
                     <LogOut size={12} /> Log Out

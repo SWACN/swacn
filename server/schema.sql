@@ -15,7 +15,6 @@ CREATE TABLE enterprise_domains (
     id SERIAL PRIMARY KEY,
     enterprise_id INT REFERENCES enterprises(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL, -- e.g., 'google.com'
-    assign_role VARCHAR(50) NOT NULL CHECK (assign_role IN ('pro')),
     UNIQUE(enterprise_id, domain)
 );
 
@@ -50,11 +49,15 @@ CREATE TABLE projects (
     
     is_super_project BOOLEAN DEFAULT FALSE,
     
-    -- For Pro users importing projects
-    forked_from_project_id INT REFERENCES projects(id) ON DELETE SET NULL,
+    -- VM and File System state
+    manifest_url TEXT NOT NULL,
+    baseline_url TEXT,
     
-    -- Saved state of the VM for this project
-    vm_state_url TEXT,
+    -- Theme and Display settings
+    theme VARCHAR(255) DEFAULT 'swacn-dark',
+    show_keystrokes BOOLEAN DEFAULT TRUE,
+    allow_fs_download BOOLEAN DEFAULT TRUE,
+    embed_theme VARCHAR(255) DEFAULT 'dark',
     
     deleted_at TIMESTAMP DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -67,13 +70,7 @@ CREATE TABLE casts (
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     project_id INT REFERENCES projects(id) ON DELETE CASCADE, -- Links multiple casts to a project
     title VARCHAR(255), -- Replaced project_name
-    manifest_url TEXT NOT NULL,
-    baseline_url TEXT,
     recording_url TEXT,
-    theme VARCHAR(255) DEFAULT 'swacn-dark',
-    show_keystrokes BOOLEAN DEFAULT TRUE,
-    allow_fs_download BOOLEAN DEFAULT TRUE,
-    embed_theme VARCHAR(255) DEFAULT 'dark',
     deleted_at TIMESTAMP DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
