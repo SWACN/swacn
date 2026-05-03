@@ -1,6 +1,4 @@
 import { Terminal } from '@xterm/xterm';
-// @ts-ignore
-import { V86 } from 'v86';
 import wasmURL from 'v86/build/v86.wasm?url';
 
 export type VMStatus =
@@ -152,7 +150,7 @@ export class V86VM {
   private role: 'master' | 'client' | null = null;
 
   // Master state
-  private emulator: any = null;
+  private worker: Worker | null = null;
   private outputBuffer = '';
   private resolveCommand: (() => void) | null = null;
   private currentMarker: string | null = null;
@@ -197,8 +195,10 @@ export class V86VM {
     // Different tabs → different SharedWorker instances → no cross-tab interference.
     const tabId = getTabScopeId();
     try {
+      const workerUrl = new URL('./relay-worker.ts', import.meta.url).href;
       const sw = new SharedWorker(
-        `/relay.worker.js?p=${encodeURIComponent(this.projectId)}&t=${tabId}`
+        `${workerUrl}?p=${encodeURIComponent(this.projectId)}&t=${tabId}`,
+        { type: 'module' }
       );
       sw.port.start();
       this.relayPort = sw.port;
@@ -325,13 +325,12 @@ export class V86VM {
     this.outputSeq++;
   }
 
-  private consoleOut = (byte: number) => {
+  private consoleOut = (chunk: string) => {
     if (this.disposed) return;
-    const char = String.fromCharCode(byte);
     if (this.isInteractiveMode) {
-      this.xterm.write(char);
+      this.xterm.write(chunk);
       // Batch output — flush every 16ms
-      this.pendingOutput += char;
+      this.pendingOutput += chunk;
       if (!this.outputFlushTimer) {
         // 4ms flush via MessageChannel — much faster than 16ms setTimeout
         this.outputFlushTimer = setTimeout(() => {
@@ -341,7 +340,8 @@ export class V86VM {
         }, 4);
       }
     } else {
-      this.outputBuffer += char;
+      console.log('[V86VM] Received chunk from worker:', chunk);
+      this.outputBuffer += chunk;
       if (this.resolveCommand && this.currentMarker &&
           this.outputBuffer.includes(this.currentMarker) &&
           (this.outputBuffer.endsWith('# ') || this.outputBuffer.endsWith('% ') || this.outputBuffer.endsWith('$ '))) {
@@ -355,7 +355,7 @@ export class V86VM {
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   private async execWait(cmd: string): Promise<string> {
-    if (!this.emulator || this.disposed) return '';
+    if (!this.worker || this.disposed) return '';
     this.outputBuffer = '';
     const nonce = Math.random().toString(36).substring(2, 10);
     this.currentMarker = `__SWACN_${nonce}__`;
@@ -365,10 +365,11 @@ export class V86VM {
         this.currentMarker = null; resolve(out);
       };
       const full = `${cmd} ; printf "${this.currentMarker}"\n`;
-      for (let i = 0; i < full.length; i++) {
+      for (let i = 0; i < full.length; i += 64) {
         if (this.disposed) { resolve(''); return; }
-        this.emulator?.serial0_send(full[i]);
-        if (i > 0 && i % 64 === 0) await mcSleep(0);
+        const chunk = full.substring(i, i + 64);
+        this.worker?.postMessage({ type: 'SERIAL_SEND', payload: { data: chunk } });
+        await mcSleep(0);
       }
     });
   }
@@ -381,7 +382,7 @@ export class V86VM {
 
     const handleClientInput = (data: string) => {
       if (this.disposed || !this.isInteractiveMode) return;
-      for (let i = 0; i < data.length; i++) this.emulator?.serial0_send(data[i]);
+      this.worker?.postMessage({ type: 'SERIAL_SEND', payload: { data } });
     };
 
     // Primary: relay port (fast, ~0.1ms)
@@ -430,43 +431,19 @@ export class V86VM {
       if (this.disposed) return;
 
 
-      // Chrome throttles both rAF AND setTimeout in cross-origin iframes
-      // (e.g. file:// parent embedding http://localhost iframes). This kills
-      // V86's emulation tick rate by 7-10x. MessageChannel postMessage fires
-      // tasks WITHOUT any timer throttling policy — same trick React's scheduler
-      // uses internally. We patch window.requestAnimationFrame so V86's entire
-      // emulation loop runs at full native speed inside the iframe.
-      const isEmbedded = window.self !== window.top;
-      if (isEmbedded) {
-        const mc = new MessageChannel();
-        mc.port1.start();
-        mc.port2.start();
-        // Each rAF registration replaces the port2 handler (V86 only has one
-        // pending rAF at a time). cancelAnimationFrame nulls the handler.
-        (window as any).requestAnimationFrame = (cb: FrameRequestCallback): number => {
-          mc.port2.onmessage = () => { mc.port2.onmessage = null; cb(performance.now()); };
-          mc.port1.postMessage(null);
-          return 1; // V86 uses the return value only for cancelAnimationFrame
-        };
-        (window as any).cancelAnimationFrame = (_id: number) => {
-          mc.port2.onmessage = null;
-        };
-      }
+      const wasmModule = await getWasmModule();
 
-      this.emulator = new V86({
-        wasm_fn: async (imports: any) => {
-          const module = await getWasmModule();
-          return (await WebAssembly.instantiate(module, imports)).exports;
-        },
-        memory_size: 256 * 1024 * 1024, vga_memory_size: 8 * 1024 * 1024,
-        bios: { buffer: biosData.buffer as ArrayBuffer },
-        vga_bios: { buffer: vgabiosData.buffer as ArrayBuffer },
-        bzimage: { buffer: bzimageData.buffer as ArrayBuffer },
-        filesystem: {},
-        cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0',
-        autostart: true, disable_keyboard: true, disable_mouse: true, disable_speaker: true,
+      this.worker = new Worker(new URL('./v86-worker.ts', import.meta.url), { type: 'module' });
+      this.worker.onmessage = (e) => {
+        if (e.data.type === 'OUTPUT_STR') {
+          this.consoleOut(e.data.data);
+        }
+      };
+
+      this.worker.postMessage({
+        type: 'INIT',
+        payload: { bios: biosData, vgabios: vgabiosData, bzimage: bzimageData, wasmModule }
       });
-      this.emulator.add_listener('serial0-output-byte', this.consoleOut);
 
 
       await mcPoll(() =>
@@ -492,7 +469,7 @@ export class V86VM {
           try {
             const bd = await baselinePromise;
             emit('extracting_baseline');
-            this.emulator?.create_file('baseline.tar.gz', bd);
+            this.worker?.postMessage({ type: 'CREATE_FILE', payload: { name: 'baseline.tar.gz', data: bd } });
             // Combine extract + cleanup into one round-trip
             await this.execWait('zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn; rm /mnt/baseline.tar.gz');
           } catch (err) { console.error('[V86VM] baseline failed', err); }
@@ -511,7 +488,7 @@ export class V86VM {
               let ip = tool.install_path || '/usr/bin';
               if (!ip.endsWith(tool.name)) ip = ip.endsWith('/') ? `${ip}${tool.name}` : `${ip}/${tool.name}`;
               const dir = ip.substring(0, ip.lastIndexOf('/'));
-              this.emulator?.create_file(fn, data);
+              this.worker?.postMessage({ type: 'CREATE_FILE', payload: { name: fn, data } });
               // All 4 ops in one round-trip: mkdir + cp + chmod + rm
               await this.execWait(`mkdir -p ${dir}; cp /mnt/${fn} ${ip}; chmod +x ${ip}; rm /mnt/${fn}`);
             }
@@ -542,8 +519,8 @@ export class V86VM {
 
       this.isInteractiveMode = true;
       this.xtermDataListener = this.xterm.onData(data => {
-        if (!this.isInteractiveMode || !this.emulator) return;
-        this.emulator.serial0_send(data);
+        if (!this.isInteractiveMode || !this.worker) return;
+        this.worker.postMessage({ type: 'SERIAL_SEND', payload: { data } });
       });
 
       // Tell clients: clear, write initial output, mark ready
@@ -560,10 +537,10 @@ export class V86VM {
   }
 
   public setTerminalSize(cols?: number, rows?: number) {
-    if (!this.emulator || !this.isInteractiveMode) return;
+    if (!this.worker || !this.isInteractiveMode) return;
     const c = cols ?? this.xterm.cols, r = rows ?? this.xterm.rows;
     const cmd = ` stty -echo; stty cols ${c} rows ${r}; stty echo\n`;
-    for (let i = 0; i < cmd.length; i++) this.emulator.serial0_send(cmd[i]);
+    this.worker.postMessage({ type: 'SERIAL_SEND', payload: { data: cmd } });
   }
 
   public dispose() {
@@ -575,8 +552,11 @@ export class V86VM {
     if (this.role === 'master') {
       localStorage.removeItem(K.master(this.projectId));
       localStorage.removeItem(K.status(this.projectId));
-      if (this.emulator) this.emulator.stop();
-      this.emulator = null;
+      if (this.worker) {
+        this.worker.postMessage({ type: 'STOP' });
+        this.worker.terminate();
+      }
+      this.worker = null;
       this.disposeResolve?.();
     }
   }

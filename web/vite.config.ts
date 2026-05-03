@@ -48,6 +48,7 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss(), crossOriginIsolation(), fetchProxy()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      global: 'globalThis',
     },
     resolve: {
       alias: {
