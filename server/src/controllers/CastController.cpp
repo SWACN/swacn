@@ -95,6 +95,22 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                         file.saveAs(absolute_save_path);
                     }
 
+                    bool delete_baseline = false;
+                    bool delete_recording = false;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first == "delete_baseline" && field.second == "true") delete_baseline = true;
+                        if (field.first == "delete_recording" && field.second == "true") delete_recording = true;
+                    }
+
+                    if (delete_baseline) {
+                        try { fs::remove(cast_dir / "baseline.tar.gz"); } catch (...) {}
+                        has_baseline = false;
+                    }
+                    if (delete_recording) {
+                        try { fs::remove(cast_dir / "recording.cast"); } catch (...) {}
+                        has_recording = false;
+                    }
+
                     std::string baseline_val = has_baseline ? (cast_uuid + "/baseline.tar.gz") : "";
                     std::string recording_val = has_recording ? (cast_uuid + "/recording.cast") : "";
 
@@ -474,8 +490,28 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 file.saveAs(absolute_save_path);
             }
 
-            std::string baseline_val = has_baseline ? (id + "/baseline.tar.gz") : "";
-            std::string recording_val = has_recording ? (id + "/recording.cast") : "";
+            bool delete_baseline = false;
+            bool delete_recording = false;
+            for (auto const& field : fileUpload.getParameters()) {
+                if (field.first == "delete_baseline" && field.second == "true") delete_baseline = true;
+                if (field.first == "delete_recording" && field.second == "true") delete_recording = true;
+            }
+
+            if (delete_baseline) {
+                try { fs::remove(cast_dir / "baseline.tar.gz"); } catch (...) {}
+                has_baseline = false;
+            }
+            if (delete_recording) {
+                try { fs::remove(cast_dir / "recording.cast"); } catch (...) {}
+                has_recording = false;
+            }
+
+            LOG_INFO << "Updating Cast: " << id << " delete_baseline: " << delete_baseline << " delete_recording: " << delete_recording;
+
+            std::string baseline_val = has_baseline ? (id + "/baseline.tar.gz") : (delete_baseline ? "__DELETE__" : "");
+            std::string recording_val = has_recording ? (id + "/recording.cast") : (delete_recording ? "__DELETE__" : "");
+
+            LOG_INFO << "Baseline Val: " << baseline_val << " Recording Val: " << recording_val;
 
             bool has_keystrokes = false;
             if (has_recording) {
@@ -497,11 +533,17 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                 if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
                     title = manifest_json["environment"]["project"].asString();
                 }
-            } catch (...) { }
+            } catch (const std::exception& e) { 
+                LOG_WARN << "Manifest parse failed: " << e.what();
+            }
 
             // Update Database
             dbClient->execSqlAsync(
-                "UPDATE projects SET name = COALESCE(NULLIF($1, ''), name), baseline_url = COALESCE(NULLIF($2, ''), baseline_url), show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END WHERE id = $4",
+                "UPDATE projects SET "
+                "name = COALESCE(NULLIF($1, ''), name), "
+                "baseline_url = CASE WHEN $2 = '__DELETE__' THEN NULL WHEN $2 <> '' THEN $2 ELSE baseline_url END, "
+                "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END "
+                "WHERE id = $4",
                 [callback, dbClient, id, project_id, user_id, title, recording_val](const drogon::orm::Result& res) {
                     
                     auto returnSuccess = [callback, id]() {
@@ -517,7 +559,14 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         callback(drogon::HttpResponse::newHttpJsonResponse(ret));
                     };
 
-                    if (!recording_val.empty()) {
+                    if (recording_val == "__DELETE__") {
+                        dbClient->execSqlAsync(
+                            "UPDATE casts SET deleted_at = CURRENT_TIMESTAMP WHERE project_id = $1 AND deleted_at IS NULL",
+                            [returnSuccess](const drogon::orm::Result& r) { returnSuccess(); },
+                            [callback](const drogon::orm::DrogonDbException& e) { callback(drogon::HttpResponse::newHttpResponse()); },
+                            project_id
+                        );
+                    } else if (!recording_val.empty()) {
                         dbClient->execSqlAsync(
                             "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), $4)",
                             [returnSuccess](const drogon::orm::Result& res2) {

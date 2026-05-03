@@ -506,6 +506,7 @@ export class V86VM {
       }
 
       const welcome = manifestUrl ? await this.execWait('cat welcome.txt 2>/dev/null') : null;
+      const initOutput = manifestUrl ? await this.execWait('sh init.sh 2>/dev/null') : null;
 
       // ── Batch env vars + PS1 + stty into ONE round-trip ──────────────────
       const envSetup = Object.entries(manifestEnv).length > 0
@@ -523,7 +524,20 @@ export class V86VM {
 
       this.xterm.clear();
       const PROMPT = 'swacn@sandbox:~$ ';
-      const initial = (welcome?.trim()) ? welcome.trim() + '\r\n\r\n' + PROMPT : PROMPT;
+      
+      let initial = '';
+      if (welcome?.trim()) {
+        initial += welcome.trim();
+      }
+      if (initOutput?.trim()) {
+        if (initial) initial += '\r\n\r\n';
+        initial += initOutput.trim();
+      }
+      if (initial) {
+        initial += '\r\n\r\n';
+      }
+      initial += PROMPT;
+      
       this.xterm.write(initial);
 
       this.isInteractiveMode = true;

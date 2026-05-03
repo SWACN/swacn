@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { SquareTerminal, XCircle } from 'lucide-react';
 import { getAuthToken, fetchCasts, fetchCastDetails } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
+import { TarReader } from '../lib/TarReader';
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +17,14 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [createTools, setCreateTools] = useState('');
   const [createFiles, setCreateFiles] = useState<FileList | null>(null);
   const [createRecordingFile, setCreateRecordingFile] = useState<File | null>(null);
+  const [createWelcomeMessage, setCreateWelcomeMessage] = useState('');
+  const [showWelcomeEditor, setShowWelcomeEditor] = useState(false);
+  const [createInitScript, setCreateInitScript] = useState('');
+  const [showInitEditor, setShowInitEditor] = useState(false);
+  const [deleteWelcome, setDeleteWelcome] = useState(false);
+  const [deleteInit, setDeleteInit] = useState(false);
+  const [deleteBaseline, setDeleteBaseline] = useState(false);
+  const [deleteRecording, setDeleteRecording] = useState(false);
   const [existingBaseline, setExistingBaseline] = useState<string | null>(null);
   const [existingRecording, setExistingRecording] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -53,6 +62,18 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setExistingBaseline(null);
       setExistingRecording(null);
       setUploadError(null);
+      setCreateWelcomeMessage('');
+      setShowWelcomeEditor(false);
+      setCreateInitScript('');
+      setShowInitEditor(false);
+      setDeleteWelcome(false);
+      setDeleteInit(false);
+      setDeleteBaseline(false);
+      setDeleteRecording(false);
+      setCreateFiles(null);
+      setDeleteInit(false);
+      setDeleteBaseline(false);
+      setDeleteRecording(false);
     }
   }, [isOpen, editCastId]);
 
@@ -125,36 +146,103 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       const formData = new FormData();
       let totalSize = 0;
 
-      if (createFiles && createFiles.length > 0) {
+      if ((createFiles && createFiles.length > 0) || (editCastId && (showWelcomeEditor || showInitEditor || deleteWelcome || deleteInit || deleteBaseline))) {
         manifest.baseline = "baseline.tar.gz";
         const builder = new TarBuilder();
-        
-        for (let i = 0; i < createFiles.length; i++) {
-          const file = createFiles[i];
-          const relativePath = file.webkitRelativePath || file.name;
-          const pathParts = relativePath.split('/');
-          if (pathParts.length > 1) pathParts.shift();
-          const finalPath = pathParts.join('/') || relativePath;
+        const filesToBundle: Record<string, Uint8Array> = {};
 
-          const buffer = await file.arrayBuffer();
-          builder.addFile(finalPath, new Uint8Array(buffer));
+        // Case 1: Fetch existing files if editing
+        if (editCastId) {
+          const res = await fetch(`/uploads/${editCastId}/baseline.tar.gz`);
+          if (res.ok) {
+            // @ts-ignore
+            const stream = res.body!.pipeThrough(new DecompressionStream('gzip'));
+            const decompressed = await new Response(stream).arrayBuffer();
+            const existingFiles = TarReader.extractFiles(new Uint8Array(decompressed));
+            
+            if (!createFiles || createFiles.length === 0) {
+              // Not uploading new files
+              if (!deleteBaseline) {
+                // Keep everything if baseline not deleted
+                existingFiles.forEach(f => filesToBundle[f.name] = f.data);
+              } else {
+                // Baseline deleted, but retain scripts if not explicitly deleted
+                const oldWelcome = existingFiles.find(f => f.name === 'welcome.txt')?.data;
+                const oldInit = existingFiles.find(f => f.name === 'init.sh')?.data;
+                if (oldWelcome && !deleteWelcome) filesToBundle['welcome.txt'] = oldWelcome;
+                if (oldInit && !deleteInit) filesToBundle['init.sh'] = oldInit;
+              }
+            } else {
+              // Uploading new files: only pre-seed special files for retention
+              const oldWelcome = existingFiles.find(f => f.name === 'welcome.txt')?.data;
+              const oldInit = existingFiles.find(f => f.name === 'init.sh')?.data;
+              if (oldWelcome && !deleteWelcome) filesToBundle['welcome.txt'] = oldWelcome;
+              if (oldInit && !deleteInit) filesToBundle['init.sh'] = oldInit;
+            }
+          }
         }
 
-        const tarBlob = builder.build();
-        
-        if (typeof CompressionStream !== 'undefined') {
-          const compressedStream = tarBlob.stream().pipeThrough(new CompressionStream('gzip'));
-          const gzipBlob = await new Response(compressedStream).blob();
-          totalSize += gzipBlob.size;
-          formData.append('baseline', gzipBlob, 'baseline.tar.gz');
+        // Case 2: New folder uploaded (if baseline not deleted)
+        if (createFiles && createFiles.length > 0 && !deleteBaseline) {
+          for (let i = 0; i < createFiles.length; i++) {
+            const file = createFiles[i];
+            const relativePath = file.webkitRelativePath || file.name;
+            const pathParts = relativePath.split('/');
+            if (pathParts.length > 1) pathParts.shift();
+            const finalPath = pathParts.join('/') || relativePath;
+
+            const buffer = await file.arrayBuffer();
+            filesToBundle[finalPath] = new Uint8Array(buffer);
+          }
+        }
+
+        // Case 3: Apply modal welcome message (highest priority)
+        if ((showWelcomeEditor || !editCastId) && createWelcomeMessage.trim() && !deleteWelcome) {
+          filesToBundle['welcome.txt'] = new TextEncoder().encode(createWelcomeMessage);
+        } else if (deleteWelcome) {
+          delete filesToBundle['welcome.txt'];
+        }
+
+        // Case 4: Apply modal init script (highest priority)
+        if ((showInitEditor || !editCastId) && createInitScript.trim() && !deleteInit) {
+          filesToBundle['init.sh'] = new TextEncoder().encode(createInitScript);
+        } else if (deleteInit) {
+          delete filesToBundle['init.sh'];
+        }
+
+        if (Object.keys(filesToBundle).length > 0) {
+          Object.entries(filesToBundle).forEach(([path, data]) => {
+            builder.addFile(path, data);
+          });
+
+          const tarBlob = builder.build();
+          
+          if (typeof CompressionStream !== 'undefined') {
+            const compressedStream = tarBlob.stream().pipeThrough(new CompressionStream('gzip'));
+            const gzipBlob = await new Response(compressedStream).blob();
+            totalSize += gzipBlob.size;
+            formData.append('baseline', gzipBlob, 'baseline.tar.gz');
+            manifest.baseline = "baseline.tar.gz";
+          } else {
+            throw new Error("Browser does not support CompressionStream");
+          }
         } else {
-          throw new Error("Browser does not support CompressionStream");
+          // Everything deleted from baseline
+          manifest.baseline = null;
+          formData.append('delete_baseline', 'true');
         }
+      } else if (deleteBaseline) {
+        manifest.baseline = null;
+        formData.append('delete_baseline', 'true');
       }
 
-      if (createRecordingFile) {
+      if (deleteRecording) {
+        manifest.recording = null;
+        formData.append('delete_recording', 'true');
+      } else if (createRecordingFile) {
         totalSize += createRecordingFile.size;
         formData.append('recording', createRecordingFile, 'recording.cast');
+        manifest.recording = "recording.cast";
       }
 
       const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
@@ -199,6 +287,10 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setCreateTools('');
       setCreateFiles(null);
       setCreateRecordingFile(null);
+      setCreateWelcomeMessage('');
+      setShowWelcomeEditor(false);
+      setCreateInitScript('');
+      setShowInitEditor(false);
       onClose();
       window.dispatchEvent(new CustomEvent('project-created'));
       if (castId) {
@@ -270,59 +362,149 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
-              <label className={`block w-full bg-surface-container-high border-2 ${editCastId && (!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
-                <input 
-                  type="file" 
-                  // @ts-ignore
-                  webkitdirectory="true" 
-                  directory=""
-                  onChange={(e) => setCreateFiles(e.target.files)}
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform text-center">
-                    {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
-                  </span>
-                  
-                  {createFiles && createFiles.length > 0 ? (
-                    <span className="text-xs opacity-70 font-mono text-primary font-bold">
-                      {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
-                    </span>
-                  ) : (editCastId && (
-                    <span className="text-xs opacity-50 font-mono">
-                      Leave empty to keep existing
-                    </span>
-                  ))}
+              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Welcome Message (printed on boot)</label>
+              {!showWelcomeEditor && editCastId ? (
+                <div className="flex gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowWelcomeEditor(true)}
+                    className="flex-1 bg-surface-container-high border-2 border-dashed border-on-surface/50 p-4 font-mono text-sm font-bold text-on-surface/70 hover:bg-white transition-colors"
+                  >
+                    CHANGE WELCOME MESSAGE
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setDeleteWelcome(!deleteWelcome); if (!deleteWelcome) setCreateWelcomeMessage(''); }}
+                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteWelcome ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                  >
+                    {deleteWelcome ? 'WILL DELETE' : 'DELETE'}
+                  </button>
                 </div>
-              </label>
+              ) : (
+                <textarea 
+                  value={createWelcomeMessage}
+                  onChange={(e) => setCreateWelcomeMessage(e.target.value)}
+                  className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
+                  placeholder="Welcome to the SWACN sandbox! Type 'help' to begin."
+                />
+              )}
+            </div>
+            <div>
+              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Initialization Script (init.sh)</label>
+              {!showInitEditor && editCastId ? (
+                <div className="flex gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowInitEditor(true)}
+                    className="flex-1 bg-surface-container-high border-2 border-dashed border-on-surface/50 p-4 font-mono text-sm font-bold text-on-surface/70 hover:bg-white transition-colors"
+                  >
+                    CHANGE INIT SCRIPT
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setDeleteInit(!deleteInit); if (!deleteInit) setCreateInitScript(''); }}
+                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteInit ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                  >
+                    {deleteInit ? 'WILL DELETE' : 'DELETE'}
+                  </button>
+                </div>
+              ) : (
+                <textarea 
+                  value={createInitScript}
+                  onChange={(e) => setCreateInitScript(e.target.value)}
+                  className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
+                  placeholder="#!/bin/sh&#10;echo 'Setting up environment...'&#10;npm install"
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
+              <div className="flex gap-2 mb-2">
+                <label className={`flex-1 block bg-surface-container-high border-2 ${editCastId && (!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
+                  <input 
+                    type="file" 
+                    // @ts-ignore
+                    webkitdirectory="true" 
+                    directory=""
+                    onChange={(e) => {
+                      setCreateFiles(e.target.files);
+                      if (e.target.files && e.target.files.length > 0) {
+                        setDeleteBaseline(false);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                      {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
+                    </span>
+                    
+                    {createFiles && createFiles.length > 0 && (
+                      <span className="text-xs opacity-70 font-mono text-primary font-bold">
+                        {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
+                      </span>
+                    )}
+                  </div>
+                </label>
+                {editCastId && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const newState = !deleteBaseline;
+                      setDeleteBaseline(newState);
+                      if (newState) setCreateFiles(null);
+                    }}
+                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteBaseline ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                  >
+                    {deleteBaseline ? 'WILL DELETE' : 'DELETE'}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
               <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Terminal Recording (.cast file)</label>
-              <label className={`block w-full bg-surface-container-high border-2 ${editCastId && !createRecordingFile ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
-                <input 
-                  type="file" 
-                  accept=".cast"
-                  onChange={(e) => setCreateRecordingFile(e.target.files?.[0] || null)}
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <span className="font-mono font-bold uppercase tracking-widest text-on-surface group-hover:scale-105 transition-transform text-center">
-                    {createRecordingFile ? "New Recording Selected" : (editCastId ? "Replace Recording" : "Select Recording")}
-                  </span>
-                  
-                  {createRecordingFile ? (
-                    <span className="text-xs opacity-70 font-mono text-primary font-bold">
-                      {createRecordingFile.name}
+              <div className="flex gap-2 mb-2">
+                <label className={`flex-1 block w-full bg-surface-container-high border-2 ${editCastId && !createRecordingFile ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
+                  <input 
+                    type="file" 
+                    accept=".cast"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setCreateRecordingFile(file);
+                      if (file) {
+                        setDeleteRecording(false);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                      {createRecordingFile ? "New Recording Selected" : (editCastId ? "Replace Recording" : "Select Recording")}
                     </span>
-                  ) : (editCastId && (
-                    <span className="text-xs opacity-50 font-mono">
-                      Leave empty to keep existing
-                    </span>
-                  ))}
-                </div>
-              </label>
+                    
+                    {createRecordingFile && (
+                      <span className="text-xs opacity-70 font-mono text-primary font-bold">
+                        {createRecordingFile.name}
+                      </span>
+                    )}
+                  </div>
+                </label>
+                {editCastId && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const newState = !deleteRecording;
+                      setDeleteRecording(newState);
+                      if (newState) setCreateRecordingFile(null);
+                    }}
+                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteRecording ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                  >
+                    {deleteRecording ? 'WILL DELETE' : 'DELETE'}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="pt-6">
