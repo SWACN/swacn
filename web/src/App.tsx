@@ -13,7 +13,7 @@ import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Lab } from './pages/Lab';
 import { Guide } from './pages/Guide';
-import { CLI } from './pages/CLI';
+
 import { AuthCallback } from './pages/AuthCallback';
 import { Dashboard } from './pages/Dashboard';
 import { Terms } from './pages/Terms';
@@ -29,7 +29,7 @@ export default function App() {
           <Route path="/lab/:id" element={<Lab />} />
           <Route path="/lab" element={<Lab />} /> {/* Fallback for testing */}
           <Route path="/guide" element={<Guide />} />
-          <Route path="/cli" element={<CLI />} />
+
           <Route path="/terms" element={<Terms />} />
           {/* Fallback route */}
 

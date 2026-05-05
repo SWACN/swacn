@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SquareTerminal, XCircle } from 'lucide-react';
+import { SquareTerminal, XCircle, Globe, Lock } from 'lucide-react';
 import { getAuthToken, fetchCasts, fetchCastDetails, fetchMe } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 import { TarReader } from '../lib/TarReader';
@@ -27,6 +27,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [existingBaseline, setExistingBaseline] = useState<string | null>(null);
   const [isProUser, setIsProUser] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -58,6 +59,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             }
             setRecordings(existing);
           }
+          if (details.is_public !== undefined) setIsPublic(details.is_public);
         })
         .catch(err => console.error("Failed to fetch cast details for edit", err));
 
@@ -72,6 +74,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                            data.binaries?.x86_64 || data.environment?.binaries?.x86_64 || [];
           setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
           setExistingBaseline(data.baseline || null);
+          if (data.is_public !== undefined) setIsPublic(data.is_public);
         })
         .catch(err => console.error("Failed to fetch manifest for edit", err));
     } else if (isOpen) {
@@ -81,6 +84,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setCreateFiles(null);
       setRecordings([{ file: null, title: '', uid: Date.now() }]);
       setExistingBaseline(null);
+      setIsPublic(true);
       setUploadError(null);
       setCreateWelcomeMessage('');
       setShowWelcomeEditor(false);
@@ -109,7 +113,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
     try {
       const token = getAuthToken();
-      if (!token) throw new Error("Not authenticated. Please authenticate your CLI or sign in.");
+      if (!token) throw new Error("Not authenticated. Please sign in to create a project.");
 
       if (!editCastId) {
         const casts = await fetchCasts();
@@ -276,6 +280,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       }
 
       formData.append('manifest', manifestBlob, 'manifest.json');
+      formData.append('is_public', isPublic.toString());
 
       let castId = editCastId;
       if (editCastId) {
@@ -353,19 +358,35 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
           )}
 
           <form onSubmit={handleCreateProject} className="space-y-6">
-            <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Project Name</label>
-              <input 
-                type="text" 
-                value={createProjectName}
-                onChange={(e) => setCreateProjectName(e.target.value)}
-                className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors"
-                placeholder="my-awesome-project"
-              />
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Project Name</label>
+                <input 
+                  type="text" 
+                  value={createProjectName}
+                  onChange={(e) => setCreateProjectName(e.target.value)}
+                  className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors"
+                  placeholder="my-awesome-project"
+                />
+              </div>
+              {isProUser && (
+                <div className="w-40 sm:w-48">
+                  <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Visibility</label>
+                  <button 
+                    type="button"
+                    onClick={() => setIsPublic(!isPublic)}
+                    className={`w-full border-2 p-3 font-mono text-sm font-bold transition-colors flex items-center justify-center gap-2 h-[46px] ${isPublic ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high text-on-surface/50 border-dashed border-on-surface/50 hover:bg-white hover:text-on-surface'}`}
+                  >
+                    {isPublic ? <Globe size={14} /> : <Lock size={14} />}
+                    <span className="hidden sm:inline">{isPublic ? 'PUBLIC' : 'PRIVATE'}</span>
+                    <span className="sm:hidden">{isPublic ? 'PUB' : 'PRIV'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Environment Variables (KEY=value)</label>
+              <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Environment Variables (KEY=value)</label>
               <textarea 
                 value={createEnvVars}
                 onChange={(e) => setCreateEnvVars(e.target.value)}
@@ -375,7 +396,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Tool Binaries (name=url, one per line)</label>
+              <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Tool Binaries (name=url, one per line)</label>
               <textarea 
                 value={createTools}
                 onChange={(e) => setCreateTools(e.target.value)}
@@ -385,7 +406,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Welcome Message (printed on boot)</label>
+              <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Welcome Message (printed on boot)</label>
               {!showWelcomeEditor && editCastId ? (
                 <div className="flex gap-2">
                   <button 
@@ -398,7 +419,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   <button 
                     type="button"
                     onClick={() => { setDeleteWelcome(!deleteWelcome); if (!deleteWelcome) setCreateWelcomeMessage(''); }}
-                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${deleteWelcome ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${deleteWelcome ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
                   >
                     {deleteWelcome ? 'UNDO' : 'DEL'}
                   </button>
@@ -413,7 +434,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               )}
             </div>
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Initialization Script (init.sh)</label>
+              <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Initialization Script (init.sh)</label>
               {!showInitEditor && editCastId ? (
                 <div className="flex gap-2">
                   <button 
@@ -426,7 +447,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   <button 
                     type="button"
                     onClick={() => { setDeleteInit(!deleteInit); if (!deleteInit) setCreateInitScript(''); }}
-                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${deleteInit ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${deleteInit ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
                   >
                     {deleteInit ? 'UNDO' : 'DEL'}
                   </button>
@@ -442,8 +463,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
-              <div className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${deleteBaseline ? 'border-red-500/50 bg-red-500/5' : 'border-on-surface bg-surface-container-high'}`}>
+              <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
+              <div className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${deleteBaseline ? 'border-dashed border-on-surface/30 bg-surface-container-low' : 'border-on-surface bg-surface-container-high'}`}>
                 <div className={`${(createFiles && createFiles.length > 0 || editCastId) ? 'flex-1' : 'w-full flex justify-center'}`}>
                   <label className={`block ${(createFiles && createFiles.length > 0 || editCastId) ? 'w-full' : 'w-full max-w-xs'} border-2 ${(!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${deleteBaseline ? 'opacity-50 pointer-events-none' : ''}`}>
                     <input 
@@ -460,12 +481,12 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                       className="hidden"
                     />
                     <div className="flex flex-col items-center justify-center gap-1">
-                      <span className="font-mono text-xs font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                      <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
                         {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
                       </span>
                       
                       {createFiles && createFiles.length > 0 && (
-                        <span className="text-[10px] opacity-70 font-mono text-primary font-bold">
+                        <span className="text-xs opacity-70 font-mono text-primary font-bold">
                           {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
                         </span>
                       )}
@@ -486,7 +507,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                         setDeleteBaseline(false);
                       }
                     }}
-                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
                   >
                     {(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'UNDO' : 'DEL'}
                   </button>
@@ -496,13 +517,13 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="font-mono text-[10px] font-bold uppercase text-primary">Terminal Recordings (.cast files)</label>
+                <label className="font-mono text-xs font-bold uppercase text-primary">Terminal Recordings (.cast files)</label>
               </div>
               <div className="space-y-4">
                 {recordings.map((rec, idx) => (
-                  <div key={rec.uid} className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${rec.deleted ? 'border-red-500/50 bg-red-500/5' : 'border-on-surface bg-surface-container-high'}`}>
+                  <div key={rec.uid} className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${rec.deleted ? 'border-dashed border-on-surface/30 bg-surface-container-low' : 'border-on-surface bg-surface-container-high'}`}>
                     <div className={`${(rec.file || rec.id) ? 'flex-1' : 'w-full flex justify-center'}`}>
-                      <label className={`block ${(rec.file || rec.id) ? 'w-full' : 'w-full max-w-xs'} border-2 ${!rec.file && !rec.id ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <label className={`flex flex-col items-center justify-center ${(rec.file || rec.id) ? 'w-full h-full' : 'w-full max-w-xs'} border-2 ${!rec.file && !rec.id ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}>
                         <input 
                           type="file" 
                           accept=".cast"
@@ -523,11 +544,11 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                           disabled={rec.deleted}
                         />
                         <div className="flex flex-col items-center justify-center gap-1">
-                          <span className="font-mono text-xs font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                          <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
                             {rec.file ? "New File Selected" : (rec.id ? "Existing Cast" : "Select Recording")}
                           </span>
                           {rec.file && (
-                            <span className="text-[10px] opacity-70 font-mono text-primary font-bold">
+                            <span className="text-xs opacity-70 font-mono text-primary font-bold">
                               {rec.file.name}
                             </span>
                           )}
@@ -546,7 +567,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                               setRecordings(newRecs);
                             }}
                             disabled={rec.deleted}
-                            className={`w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-base outline-none focus:border-primary transition-colors ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}
                             placeholder="Optional Cast Title"
                           />
                         )}
@@ -563,7 +584,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                               setRecordings(newRecs);
                             }
                           }}
-                          className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${rec.deleted ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                          className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${rec.deleted ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
                         >
                           {rec.deleted ? 'UNDO' : 'DEL'}
                         </button>

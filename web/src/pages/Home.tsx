@@ -1,134 +1,148 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { PlayCircle, Share2, Terminal, ArrowRight } from 'lucide-react';
+import { PlayCircle, Share2, Terminal, ArrowRight, FolderUp, Sparkles, Globe, Cpu, Layers, ShieldCheck, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Home() {
   return (
-    <div className="w-full h-[calc(100vh-6rem)] md:h-[calc(100vh-8rem)] px-4 md:px-8 lg:px-16 xl:px-24 py-4 md:py-8 flex flex-col justify-center overflow-hidden">
-      {/* Asymmetric Control Board Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 auto-rows-min h-full md:h-auto overflow-y-auto md:overflow-visible pr-2 md:pr-0">
+    <div className="w-full min-h-screen px-4 md:px-8 lg:px-16 xl:px-24 py-8 flex flex-col gap-8 bg-background overflow-x-hidden">
+      
+      {/* 01. HERO GRID: THE CORE UTILITY */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
         
-        {/* HERO PANEL (Spans 8 columns) */}
+        {/* PRIMARY VALUE PROP */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="col-span-1 md:col-span-8 border-4 border-on-surface bg-white hard-shadow p-6 md:p-10 relative overflow-hidden group hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="col-span-1 md:col-span-8 border-4 border-on-surface bg-white hard-shadow p-8 md:p-12 relative overflow-hidden flex flex-col justify-center"
         >
-          <div className="absolute -right-24 -bottom-24 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-700">
-            <img 
-              alt="SWACN Logo" 
-              className="w-96 h-96 grayscale contrast-125" 
-              src="../../assets/logo.png"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          
-          <div className="relative z-10 flex flex-col h-full justify-center">
-            <div className="font-mono text-xs font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 bg-primary"></span>
-              SWACN_CORE_v1.0.4
+          <div className="relative z-10">
+            <div className="font-mono text-xs font-black uppercase tracking-[0.4em] text-primary mb-6 flex items-center gap-3">
+              <span className="w-3 h-3 bg-primary animate-pulse"></span>
+              SWACN_PROTOCOL_v1.0.4
             </div>
             
-            <h1 className="font-headline text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter leading-none mb-4 max-w-2xl text-on-surface uppercase">
-              Software<br/>Without Any<br/>Cool Name.
+            <h1 className="font-headline text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.85] mb-8 text-on-surface uppercase">
+              Executable<br/>Software<br/>Artifacts.
             </h1>
             
-            <p className="font-mono text-sm md:text-base text-on-surface/70 max-w-xl mb-8 border-l-4 border-primary pl-4">
-              A highly tactile, terminal-first reactive model for deterministic state hydration and interactive web virtual machines.
+            <p className="font-mono text-base md:text-lg text-on-surface/80 max-w-2xl mb-10 border-l-4 border-primary pl-6 leading-relaxed">
+              Ditch static code snippets. SWACN captures terminal sessions and packages them into <strong>browser-native x86 sandboxes</strong>. Replay, pause, and interact with live filesystems at any point in time.
             </p>
             
-            <div className="mt-auto flex flex-wrap gap-4">
-              <Link to="/dashboard" className="bg-primary text-white border-4 border-on-surface hard-shadow hover:-translate-y-1 hover:-translate-x-1 px-8 py-4 font-mono text-sm md:text-base uppercase font-bold hover:bg-on-surface transition-all flex items-center gap-2">
-                Launch Dashboard <ArrowRight size={20} />
+            <div className="flex flex-wrap gap-4">
+              <Link to="/dashboard" className="bg-primary text-white border-4 border-on-surface hard-shadow hover:-translate-y-1 hover:-translate-x-1 px-10 py-5 font-mono text-sm uppercase font-black hover:bg-on-surface transition-all flex items-center gap-3">
+                Access Workspace <ArrowRight size={20} />
+              </Link>
+              <Link to="/guide" className="bg-white text-on-surface border-4 border-on-surface hard-shadow hover:-translate-y-1 hover:-translate-x-1 px-10 py-5 font-mono text-sm uppercase font-black hover:bg-surface-container-high transition-all flex items-center gap-3">
+                Read Specs
               </Link>
             </div>
           </div>
         </motion.div>
 
-        {/* TERMINAL MOCKUP PANEL (Spans 4 columns) */}
+        {/* TECHNICAL STACK PANEL */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
-          className="col-span-1 md:col-span-4 border-4 border-on-surface bg-on-surface hard-shadow flex flex-col group hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300"
+          className="col-span-1 md:col-span-4 border-4 border-on-surface bg-surface-container-high hard-shadow p-8 flex flex-col justify-center"
         >
-          <div className="bg-surface-container-low border-b-4 border-on-surface px-4 py-2 flex items-center justify-between shrink-0">
-            <div className="flex gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500 border border-on-surface"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500 border border-on-surface"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500 border border-on-surface"></div>
-            </div>
-            <span className="font-mono text-[10px] text-on-surface/50 uppercase font-bold">Install_CLI</span>
+          <div className="flex items-center justify-between mb-10">
+            <Cpu className="text-primary" size={48} />
+            <div className="bg-on-surface text-white text-xs font-black px-3 py-1 uppercase tracking-widest">v86_ENGINE</div>
           </div>
           
-          <div className="p-4 md:p-6 font-mono text-sm text-surface-container-low flex-grow flex flex-col justify-center">
-            <div className="flex gap-3 mb-2">
-              <span className="text-primary font-bold">➜</span>
-              <span className="text-white">curl -sL https://swacn.com/install.sh | bash</span>
-            </div>
-            <div className="text-white/40 mb-6 text-xs leading-relaxed">
-              SWACN CLI Installer (Linux/macOS)<br/>
-              Platform: macos (arm64)<br/>
-              Fetching latest release...<br/>
-              ✔ Successfully installed swacn to ~/.local/bin/swacn
-            </div>
-            <div className="flex gap-3">
-              <span className="text-primary font-bold">➜</span>
-              <span className="text-white animate-pulse">_</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* FEATURE 1 PANEL */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="col-span-1 md:col-span-4 border-4 border-on-surface bg-surface-container-low hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
-        >
-          <div className="w-10 h-10 bg-primary text-white flex items-center justify-center border-2 border-on-surface mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
-            <Terminal size={20} />
-          </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Record Everything</h3>
-          <p className="font-mono text-xs text-on-surface/70 leading-relaxed">
-            Capture stdout, keystrokes, and your project filesystem. SWACN guarantees a deterministic, pixel-perfect replay of your interactive session.
+          <h3 className="font-headline font-black text-4xl lg:text-5xl uppercase tracking-tighter mb-6 leading-[0.9]">Native x86<br/>Emulation</h3>
+          <p className="font-mono text-sm text-on-surface/70 leading-relaxed mb-10">
+            Zero server-side VM cost. Your browser executes a full i386 environment via high-performance WASM acceleration.
           </p>
-        </motion.div>
-
-        {/* FEATURE 2 PANEL */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="col-span-1 md:col-span-4 border-4 border-on-surface bg-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
-        >
-          <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-2 border-on-surface mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
-            <PlayCircle size={20} />
+          
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 font-mono text-xs font-black uppercase p-4 border-2 border-on-surface bg-white hard-shadow-sm">
+              <ShieldCheck size={20} className="text-primary shrink-0" /> Statically Linked Binaries
+            </div>
+            <div className="flex items-center gap-4 font-mono text-xs font-black uppercase p-4 border-2 border-on-surface bg-white hard-shadow-sm">
+              <Zap size={20} className="text-primary shrink-0" /> WASM-Accelerated Boot
+            </div>
+            <div className="flex items-center gap-4 font-mono text-xs font-black uppercase p-4 border-2 border-on-surface bg-white hard-shadow-sm">
+              <Layers size={20} className="text-primary shrink-0" /> Persistent FS Layering
+            </div>
           </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Interactive Playback</h3>
-          <p className="font-mono text-xs text-on-surface/70 leading-relaxed">
-            Don't just watch—interact. Pause the video at any timestamp to jump into a live v86 sandbox pre-loaded with your project's filesystem.
-          </p>
         </motion.div>
+      </div>
 
-        {/* FEATURE 3 PANEL */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="col-span-1 md:col-span-4 border-4 border-on-surface bg-primary text-white hard-shadow p-6 hover:-translate-y-2 hover:-translate-x-2 transition-transform duration-300 flex flex-col group"
-        >
-          <div className="w-10 h-10 bg-on-surface text-white flex items-center justify-center border-2 border-white/20 mb-4 group-hover:scale-110 transition-transform hard-shadow-sm">
-            <Share2 size={20} />
-          </div>
-          <h3 className="font-headline font-black text-xl uppercase tracking-tight mb-2">Embed Anywhere</h3>
-          <p className="font-mono text-xs text-white/70 leading-relaxed">
-            Ditch static code blocks. Turn your docs and tutorials into live, shareable lab environments with a simple iframe embed.
+      {/* 02. WORKFLOW SECTION: HOW IT ACTUALLY WORKS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* STEP 1 */}
+        <div className="border-4 border-on-surface bg-white hard-shadow p-8 group hover:-translate-y-2 transition-transform">
+          <div className="w-12 h-12 bg-on-surface text-white flex items-center justify-center font-black text-2xl mb-6">01</div>
+          <h4 className="font-headline font-black text-xl uppercase mb-3">Record Session</h4>
+          <p className="font-mono text-xs text-on-surface/70 leading-relaxed mb-6">
+            Use the web portal to select a local folder. Record your CLI interactions into a standard <code className="bg-primary/10 px-1">.cast</code> artifact.
           </p>
-        </motion.div>
+        </div>
+
+        {/* STEP 2 */}
+        <div className="border-4 border-on-surface bg-white hard-shadow p-8 group hover:-translate-y-2 transition-transform">
+          <div className="w-12 h-12 bg-on-surface text-white flex items-center justify-center font-black text-2xl mb-6">02</div>
+          <h4 className="font-headline font-black text-xl uppercase mb-3">Bundle Payload</h4>
+          <p className="font-mono text-xs text-on-surface/70 leading-relaxed mb-6">
+            Our builder compiles your files and scripts into a bootable manifest. No dockerfiles or server-side config required.
+          </p>
+          <div className="flex gap-2">
+            <FolderUp size={20} className="text-primary" />
+            <div className="h-2 flex-grow bg-on-surface/10 mt-2">
+              <div className="h-full bg-primary w-[70%]"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* STEP 3 */}
+        <div className="border-4 border-on-surface bg-primary text-white hard-shadow p-8 group hover:-translate-y-2 transition-transform">
+          <div className="w-12 h-12 bg-white text-primary flex items-center justify-center font-black text-2xl mb-6">03</div>
+          <h4 className="font-headline font-black text-xl uppercase mb-3">Execute & Embed</h4>
+          <p className="font-mono text-xs text-white/70 leading-relaxed mb-6">
+            Share a link or embed the lab into your documentation. Users can pause the playback and take control of the shell instantly.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Globe size={24} className="animate-spin-slow" />
+            <Share2 size={24} />
+          </div>
+        </div>
 
       </div>
+
+      {/* 03. CAPABILITIES GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        <div className="col-span-1 md:col-span-2 border-4 border-on-surface bg-white hard-shadow p-8 flex flex-col md:flex-row gap-8 items-center">
+           <div className="w-24 h-24 bg-primary/10 border-4 border-on-surface border-dashed flex items-center justify-center shrink-0">
+              <Zap size={40} className="text-primary" />
+           </div>
+           <div>
+              <h5 className="font-headline font-black text-lg uppercase mb-2">Live Lab Environments</h5>
+              <p className="font-mono text-[11px] text-on-surface/70 leading-relaxed">
+                Break the wall between video and reality. Jump into a live, interactive shell at any point during playback to explore the project filesystem.
+              </p>
+           </div>
+        </div>
+
+        <div className="col-span-1 md:col-span-2 border-4 border-on-surface bg-white hard-shadow p-8 flex flex-col md:flex-row gap-8 items-center">
+           <div className="w-24 h-24 bg-primary/10 border-4 border-on-surface border-dashed flex items-center justify-center shrink-0">
+              <Layers size={40} className="text-primary" />
+           </div>
+           <div>
+              <h5 className="font-headline font-black text-lg uppercase mb-2">Multi-Cast Lab</h5>
+              <p className="font-mono text-[11px] text-on-surface/70 leading-relaxed">
+                Pro users can attach multiple recordings to a single project. Create branching tutorials where users can explore different paths.
+              </p>
+           </div>
+        </div>
+
+      </div>
+
     </div>
   );
 }

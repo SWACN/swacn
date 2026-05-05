@@ -149,9 +149,14 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                         }
                     }
 
+                    bool is_public = true;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first == "is_public") is_public = (field.second == "true");
+                    }
+
                     // 5. Insert Project and Cast utilizing NULLIF
                     dbClient->execSqlAsync(
-                        "INSERT INTO projects (user_id, name, manifest_url, baseline_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, COALESCE(NULLIF($2, ''), 'Untitled Project'), $3, NULLIF($4, ''), $5, $6, $7) RETURNING id",
+                        "INSERT INTO projects (user_id, name, manifest_url, baseline_url, show_keystrokes, allow_fs_download, embed_theme, is_public) VALUES ($1, COALESCE(NULLIF($2, ''), 'Untitled Project'), $3, NULLIF($4, ''), $5, $6, $7, $8) RETURNING id",
                         [callback, cast_uuid, user_id, project_title, recording_files, cast_titles, dbClient](const drogon::orm::Result& res) {
                             int project_id = res[0]["id"].as<int>();
                             
@@ -210,7 +215,8 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                         baseline_val, 
                         has_keystrokes,
                         true, // allow_fs_download
-                        "dark" // embed_theme
+                        "dark", // embed_theme
+                        is_public
                     );
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {
@@ -235,9 +241,9 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     std::string like_pattern = id + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at "
+        "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, (p.is_public = true) as is_public, p.user_id "
         "FROM projects p WHERE p.manifest_url LIKE $1 AND p.deleted_at IS NULL",
-        [callback, dbClient, id](const drogon::orm::Result& r) {
+        [req, callback, dbClient, id](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k404NotFound);
@@ -246,38 +252,83 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
             }
             
             auto const& row = r[0];
-            int project_id = row["id"].as<int>();
-            Json::Value castObj;
-            castObj["id"] = id;
-            castObj["name"] = row["name"].isNull() ? "" : row["name"].as<std::string>();
-            castObj["has_baseline"] = !row["baseline_url"].isNull();
-            castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
-            castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
-            castObj["allow_fs_download"] = row["allow_fs_download"].isNull() ? true : row["allow_fs_download"].as<bool>();
-            castObj["embed_theme"] = row["embed_theme"].isNull() ? "dark" : row["embed_theme"].as<std::string>();
-            
-            dbClient->execSqlAsync(
-                "SELECT id, title, recording_url FROM casts WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC",
-                [callback, castObj](const drogon::orm::Result& c_res) mutable {
-                    Json::Value castsArr(Json::arrayValue);
-                    for (auto const& c_row : c_res) {
-                        Json::Value cObj;
-                        cObj["id"] = c_row["id"].as<int>();
-                        cObj["title"] = c_row["title"].isNull() ? "" : c_row["title"].as<std::string>();
-                        cObj["recording_url"] = c_row["recording_url"].as<std::string>();
-                        castsArr.append(cObj);
-                    }
-                    castObj["casts"] = castsArr;
-                    castObj["has_recording"] = castsArr.size() > 0;
-                    callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
-                },
-                [callback](const drogon::orm::DrogonDbException& e) {
+            bool is_public = row["is_public"].isNull() ? true : row["is_public"].as<bool>();
+            int owner_id = row["user_id"].as<int>();
+
+            auto proceed = [callback, dbClient, id, row, is_public]() {
+                int project_id = row["id"].as<int>();
+                Json::Value castObj;
+                castObj["id"] = id;
+                castObj["name"] = row["name"].isNull() ? "" : row["name"].as<std::string>();
+                castObj["has_baseline"] = !row["baseline_url"].isNull();
+                castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
+                castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
+                castObj["allow_fs_download"] = row["allow_fs_download"].isNull() ? true : row["allow_fs_download"].as<bool>();
+                castObj["embed_theme"] = row["embed_theme"].isNull() ? "dark" : row["embed_theme"].as<std::string>();
+                castObj["is_public"] = is_public;
+                
+                dbClient->execSqlAsync(
+                    "SELECT id, title, recording_url FROM casts WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC",
+                    [callback, castObj](const drogon::orm::Result& r2) mutable {
+                        castObj["casts"] = Json::arrayValue;
+                        for (auto const& c_row : r2) {
+                            Json::Value c;
+                            c["id"] = c_row["id"].as<int>();
+                            c["title"] = c_row["title"].isNull() ? "" : c_row["title"].as<std::string>();
+                            c["recording_url"] = c_row["recording_url"].as<std::string>();
+                            castObj["casts"].append(c);
+                        }
+                        castObj["has_recording"] = (r2.size() > 0);
+                        callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
+                    },
+                    [callback](const drogon::orm::DrogonDbException& e) {
+                        auto resp = drogon::HttpResponse::newHttpResponse();
+                        resp->setStatusCode(drogon::k500InternalServerError);
+                        callback(resp);
+                    },
+                    project_id
+                );
+            };
+
+            if (is_public) {
+                proceed();
+            } else {
+                std::string auth_header = req->getHeader("Authorization");
+                if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
                     auto resp = drogon::HttpResponse::newHttpResponse();
-                    resp->setStatusCode(drogon::k500InternalServerError);
+                    resp->setStatusCode(drogon::k401Unauthorized);
                     callback(resp);
-                },
-                project_id
-            );
+                    return;
+                }
+                std::string api_key = auth_header.substr(7);
+                dbClient->execSqlAsync(
+                    "SELECT id, is_super_admin FROM users WHERE api_key = $1",
+                    [callback, proceed, owner_id](const drogon::orm::Result& user_r) {
+                        if (user_r.empty()) {
+                            auto resp = drogon::HttpResponse::newHttpResponse();
+                            resp->setStatusCode(drogon::k401Unauthorized);
+                            callback(resp);
+                            return;
+                        }
+                        int user_id = user_r[0]["id"].as<int>();
+                        bool is_super_admin = user_r[0]["is_super_admin"].isNull() ? false : user_r[0]["is_super_admin"].as<bool>();
+                        
+                        if (user_id == owner_id || is_super_admin) {
+                            proceed();
+                        } else {
+                            auto resp = drogon::HttpResponse::newHttpResponse();
+                            resp->setStatusCode(drogon::k403Forbidden);
+                            callback(resp);
+                        }
+                    },
+                    [callback](const drogon::orm::DrogonDbException& e) {
+                        auto resp = drogon::HttpResponse::newHttpResponse();
+                        resp->setStatusCode(drogon::k500InternalServerError);
+                        callback(resp);
+                    },
+                    api_key
+                );
+            }
         },
         [callback](const drogon::orm::DrogonDbException& e) {
             auto resp = drogon::HttpResponse::newHttpResponse();
@@ -594,10 +645,13 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
                             project_title = manifest_json["environment"]["project"].asString();
                         }
-                    } catch (const std::exception& e) { }
+                    } catch (...) { }
 
                     std::map<std::string, std::string> cast_titles;
                     std::map<int, std::string> cast_titles_to_update;
+                    bool is_public_update = true;
+                    bool has_public_update = false;
+
                     for (auto const& field : fileUpload.getParameters()) {
                         if (field.first.find("title_") == 0) {
                             std::string rec_name = "recording_" + field.first.substr(6);
@@ -607,6 +661,9 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                                 int cast_id = std::stoi(field.first.substr(13));
                                 cast_titles_to_update[cast_id] = field.second;
                             } catch (...) {}
+                        } else if (field.first == "is_public") {
+                            is_public_update = (field.second == "true");
+                            has_public_update = true;
                         }
                     }
 
@@ -637,7 +694,8 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         "UPDATE projects SET "
                         "name = COALESCE(NULLIF($1, ''), name), "
                         "baseline_url = CASE WHEN $2 = '__DELETE__' THEN NULL WHEN $2 <> '' THEN $2 ELSE baseline_url END, "
-                        "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END "
+                        "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END, "
+                        "is_public = CASE WHEN $6 THEN $7 ELSE is_public END "
                         "WHERE id = $4",
                         [callback, dbClient, id, project_id, user_id, project_title, recording_files, cast_titles](const drogon::orm::Result& res) {
                             
@@ -688,7 +746,9 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         baseline_val,
                         has_keystrokes,
                         project_id,
-                        !recording_files.empty()
+                        !recording_files.empty(),
+                        has_public_update,
+                        is_public_update
                     );
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {

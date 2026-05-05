@@ -1,369 +1,376 @@
 import React from 'react';
-import { Terminal, Key, PlayCircle, Share2, ServerCog, ArrowRight, Laptop, Box, FileTerminal, Download, FileJson, UploadCloud, Settings, Link as LinkIcon, MousePointer2, FolderUp, Sparkles, ShieldAlert, Cpu } from 'lucide-react';
+import { Terminal, PlayCircle, Share2, ServerCog, ArrowRight, Laptop, Box, FileTerminal, Download, FileJson, UploadCloud, Settings, MousePointer2, FolderUp, Sparkles, ShieldAlert, Cpu, CheckCircle2, Zap, Lock, Globe, Layers, PlusCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
 export function Guide() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20">
+    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 bg-background">
       
       {/* Hero Section */}
-      <header className="mb-24 md:mb-32">
+      <header className="mb-24 md:mb-32 relative">
+        <div className="absolute -top-20 -left-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
         <div className="border-l-8 border-on-surface pl-6 md:pl-10">
-          <p className="font-mono text-primary text-sm md:text-base tracking-widest uppercase mb-4">Official Documentation</p>
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black font-headline tracking-tighter uppercase leading-none mb-8">
-            The SWACN<br/>User Guide
+          <p className="font-mono text-primary text-sm md:text-base tracking-[0.3em] uppercase mb-4 font-black">Technical Documentation</p>
+          <h1 className="text-5xl md:text-8xl font-black font-headline tracking-tighter uppercase leading-[0.9] mb-8">
+            Master the<br/>SWACN Lab
           </h1>
           <p className="text-lg md:text-2xl max-w-3xl font-medium leading-relaxed text-on-surface/80">
-            Learn to build, record, and share deterministic terminal sandboxes. Follow the steps below to get your first project online.
+            Build interactive, browser-native terminal sandboxes. Record interactions, bundle filesystems, and share executable environments instantly.
           </p>
         </div>
       </header>
 
-      {/* 01. Preparation: The Project Directory */}
+      {/* Account Tiers Comparison */}
       <section className="mb-32">
         <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">01. Setup the Project</h2>
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter flex items-center gap-4">
+            <Layers className="text-primary" /> 01. Choose Your Tier
+          </h2>
+          <div className="h-[4px] flex-grow bg-on-surface/10"></div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Free Tier */}
+          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-500 text-on-surface">
+              <Zap size={120} />
+            </div>
+            <h3 className="text-3xl font-black font-headline uppercase tracking-tighter mb-2">Standard</h3>
+            <p className="text-on-surface/60 font-mono text-sm mb-8">Perfect for hobbyists and open source demos.</p>
+            
+            <ul className="space-y-4 mb-12">
+              <li className="flex items-center gap-3">
+                <CheckCircle2 size={18} className="text-primary shrink-0" />
+                <span className="font-bold">15 Active Projects</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <CheckCircle2 size={18} className="text-primary shrink-0" />
+                <span className="font-bold">Standard Payload Limit</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <CheckCircle2 size={18} className="text-primary shrink-0" />
+                <span className="font-bold">Public Visibility Only</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <CheckCircle2 size={18} className="text-primary shrink-0" />
+                <span className="font-bold">Single Cast Recording</span>
+              </li>
+            </ul>
+            
+            <div className="mt-auto pt-8 border-t-2 border-dashed border-on-surface/10">
+              <span className="text-2xl font-black font-mono">$0 / month</span>
+            </div>
+          </div>
+
+          {/* Pro Tier */}
+          <div className="bg-primary text-background border-4 border-on-surface p-8 hard-shadow flex flex-col relative overflow-hidden group">
+             <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+            <div className="absolute top-0 right-0 p-4 opacity-20 text-white group-hover:scale-110 transition-transform duration-500">
+              <Sparkles size={120} />
+            </div>
+            <div className="bg-white text-primary px-3 py-1 text-[10px] font-black uppercase tracking-widest w-max mb-4">Most Popular</div>
+            <h3 className="text-3xl font-black font-headline uppercase tracking-tighter mb-2">Pro & Creator</h3>
+            <p className="text-background/60 font-mono text-sm mb-8 text-white/60">Built for technical writers and enterprise teams.</p>
+            
+            <ul className="space-y-4 mb-12 text-white">
+              <li className="flex items-center gap-3">
+                <Sparkles size={18} className="text-background shrink-0" />
+                <span className="font-bold">50 Active Projects</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <Sparkles size={18} className="text-background shrink-0" />
+                <span className="font-bold">Increased Payload Capacity</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <Sparkles size={18} className="text-background shrink-0" />
+                <span className="font-bold">Private & Unlisted Projects</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <Sparkles size={18} className="text-background shrink-0" />
+                <span className="font-bold">Multiple Casts per Project</span>
+              </li>
+            </ul>
+            
+            <div className="mt-auto pt-8 border-t-2 border-dashed border-background/20">
+              <span className="text-2xl font-black font-mono">$10 / month</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 02. Preparation */}
+      <section className="mb-32">
+        <div className="flex items-center gap-4 mb-12">
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">02. Prepare Your Payload</h2>
           <div className="h-[4px] flex-grow bg-on-surface"></div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div>
-            <p className="text-xl leading-relaxed text-on-surface/80 mb-8">
-              If you want to include a filesystem in your sandbox (via the <code className="font-bold">--fs</code> flag or Web Upload), you need to organize your files locally first.
+          <div className="space-y-8">
+            <p className="text-xl leading-relaxed text-on-surface/80">
+              SWACN sandboxes are generated from a local folder. You don't need complex configuration files; our web builder handles the environment manifest for you.
             </p>
-            <div className="space-y-6">
-              <div className="flex gap-4">
-                <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">1</div>
-                <div>
-                  <h4 className="font-bold mb-1">Create a Root Directory</h4>
-                  <p className="text-sm opacity-70 leading-relaxed">Place all files you want accessible in the VM here. Keep the total size under 2MB.</p>
-                </div>
+            
+            <div className="bg-surface-container-high border-l-8 border-primary p-6">
+              <h4 className="font-black uppercase text-sm mb-2 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-primary" /> The Root Directory
+              </h4>
+              <p className="text-sm opacity-70 leading-relaxed mb-4">
+                Pick a folder on your machine. Everything inside will be bundled into a compressed <code className="font-bold">baseline.tar.gz</code> and loaded into the VM's <code className="font-bold">/root</code> home.
+              </p>
+              <div className="bg-error/5 border-2 border-error/20 p-4 flex gap-4 items-start">
+                <ShieldAlert size={20} className="text-error shrink-0 mt-1" />
+                <p className="text-xs font-bold text-error leading-relaxed uppercase">
+                  Security Check: Ensure your folder does not contain <code className="bg-error/10">.env</code>, <code className="bg-error/10">.ssh</code>, or other private credentials.
+                </p>
               </div>
-              <div className="flex gap-4">
-                <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">2</div>
-                <div>
-                  <h4 className="font-bold mb-1 text-error">Security Check: No Secrets</h4>
-                  <p className="text-sm opacity-70 leading-relaxed font-bold">Remove .env files, private keys, or credentials. Everything in this folder will be public.</p>
-                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white border-2 border-on-surface p-4">
+                <h5 className="font-bold text-xs uppercase mb-1">welcome.txt</h5>
+                <p className="text-[10px] opacity-60">Add this to print a custom greeting on terminal boot.</p>
+              </div>
+              <div className="bg-white border-2 border-on-surface p-4">
+                <h5 className="font-bold text-xs uppercase mb-1">init.sh</h5>
+                <p className="text-[10px] opacity-60">Add this to run setup commands (like npm install) automatically.</p>
               </div>
             </div>
           </div>
-          <div className="bg-surface-container-high border-4 border-on-surface p-6 hard-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                <div className="w-3 h-3 rounded-full bg-green-400"></div>
-              </div>
-              <div className="font-mono text-[10px] uppercase font-bold opacity-50">Project Structure</div>
-            </div>
-            <pre className="font-mono text-sm leading-relaxed text-on-surface/80">
+
+          <div className="bg-on-surface text-background p-8 hard-shadow font-mono text-sm leading-relaxed relative">
+             <div className="absolute top-4 right-4 flex gap-1">
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+             </div>
+             <div className="mb-4 text-primary font-bold tracking-widest uppercase text-xs"># Recommended Structure</div>
+             <pre className="text-background/80 leading-tight">
 {`my-project/
-├── swacn.json       # Required for CLI
-├── welcome.txt      # Optional greeting
-├── src/             # Your code
-│   └── main.sh
-└── data/            # Local data
-    └── sample.json`}
-            </pre>
+├── welcome.txt      # Optional Greeting
+├── init.sh          # Optional Startup Script
+├── src/             # Your Source Code
+│   └── main.py
+└── data/            # Static Assets
+    └── config.yaml`}
+             </pre>
           </div>
         </div>
       </section>
 
-      {/* 02. Technical Requirements */}
+      {/* 03. Web Flow */}
       <section className="mb-32">
         <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">02. Technical Requirements</h2>
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">03. Deployment Flow</h2>
+          <div className="h-[4px] flex-grow bg-on-surface/20"></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="flex flex-col gap-4 group">
+            <div className="w-12 h-12 bg-on-surface text-background flex items-center justify-center font-black text-2xl group-hover:bg-primary transition-colors">1</div>
+            <h4 className="text-xl font-black uppercase tracking-tight">Initiate</h4>
+            <p className="text-sm opacity-70 leading-relaxed">
+              Click <strong className="text-primary font-black">"MAKE PROJECT"</strong> in the header. If you're not signed in, we'll prompt you for GitHub/Google auth.
+            </p>
+          </div>
+          <div className="flex flex-col gap-4 group">
+            <div className="w-12 h-12 bg-on-surface text-background flex items-center justify-center font-black text-2xl group-hover:bg-primary transition-colors">2</div>
+            <h4 className="text-xl font-black uppercase tracking-tight">Configure</h4>
+            <p className="text-sm opacity-70 leading-relaxed">
+              Set your project name, environment variables, and any external binaries you need from GitHub releases.
+            </p>
+          </div>
+          <div className="flex flex-col gap-4 group">
+            <div className="w-12 h-12 bg-on-surface text-background flex items-center justify-center font-black text-2xl group-hover:bg-primary transition-colors">3</div>
+            <h4 className="text-xl font-black uppercase tracking-tight">Upload</h4>
+            <p className="text-sm opacity-70 leading-relaxed">
+              Select your local folder and your <code className="font-bold">.cast</code> recording. Hit upload and your lab will be live in seconds.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 04. Technical Requirements */}
+      <section className="mb-32">
+        <div className="flex items-center gap-4 mb-12">
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter flex items-center gap-4">
+            <Cpu className="text-primary" /> 04. Binary Compatibility
+          </h2>
           <div className="h-[4px] flex-grow bg-primary/20"></div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-6">
-            <div className="bg-surface-container-high p-3 border-2 border-on-surface w-max">
-              <Cpu size={24} className="text-primary" />
-            </div>
-            <h3 className="text-2xl font-black font-headline uppercase tracking-tighter">Binary Compatibility</h3>
-            <p className="text-on-surface/70 leading-relaxed">
-              The WebVM environment uses <strong>v86</strong>, which emulates an x86 processor. 
-            </p>
-            <div className="bg-error/5 border-l-4 border-error p-4 text-sm font-mono italic">
-              All external tool links MUST be <strong>statically linked x86 32bit binary links</strong> for them to run in the sandbox.
-            </div>
-          </div>
-
-          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-6">
-            <div className="bg-surface-container-high p-3 border-2 border-on-surface w-max">
-              <Box size={24} className="text-on-surface" />
-            </div>
-            <h3 className="text-2xl font-black font-headline uppercase tracking-tighter">Payload Constraints</h3>
-            <ul className="space-y-4 font-mono text-sm">
-              <li className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-primary"></div>
-                <span>Max 15 Projects per account</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-primary"></div>
-                <span className="font-bold text-error">Max 2MB per upload</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-primary"></div>
-                <span>Public access by default</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* 03. Execution Path A: Web */}
-      <section id="web-flow" className="mb-32 scroll-mt-32">
-        <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">03. Web Upload Flow</h2>
-          <div className="h-[4px] flex-grow bg-on-surface/20"></div>
-        </div>
-
-        <div className="bg-primary/5 border-4 border-primary p-8 hard-shadow relative overflow-hidden group">
-          <div className="relative z-10 flex flex-col md:flex-row gap-12 items-start">
-            <div className="flex-shrink-0 w-16 h-16 bg-primary text-white flex items-center justify-center text-3xl font-black font-headline border-4 border-on-surface hard-shadow-sm">A</div>
-            <div className="flex-grow">
-              <h3 className="text-2xl font-black font-headline uppercase tracking-tighter mb-4">Drag, Drop, Deploy</h3>
-              <p className="text-lg mb-8 leading-relaxed max-w-2xl text-on-surface/80">
-                The fastest way to get your project online. No CLI needed.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white border-2 border-on-surface p-4 flex flex-col gap-3">
-                  <div className="font-black text-xs opacity-40">STEP 1</div>
-                  <h4 className="font-bold text-sm uppercase">Make Project</h4>
-                  <p className="text-xs opacity-70 leading-relaxed">Click the "Make Project" button in the global header.</p>
-                </div>
-                <div className="bg-white border-2 border-on-surface p-4 flex flex-col gap-3">
-                  <div className="font-black text-xs opacity-40">STEP 2</div>
-                  <h4 className="font-bold text-sm uppercase">Select Folder</h4>
-                  <p className="text-xs opacity-70 leading-relaxed">Choose your root directory. We'll bundle everything automatically.</p>
-                </div>
-                <div className="bg-white border-2 border-on-surface p-4 flex flex-col gap-3">
-                  <div className="font-black text-xs opacity-40">STEP 3</div>
-                  <h4 className="font-bold text-sm uppercase">Upload .cast</h4>
-                  <p className="text-xs opacity-70 leading-relaxed">(Optional) Add a recording to guide your users through the tool.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 04. Execution Path B: CLI */}
-      <section id="cli-flow" className="mb-32 scroll-mt-32">
-        <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">04. CLI Native Flow</h2>
-          <div className="h-[4px] flex-grow bg-on-surface/20"></div>
-        </div>
-
-        <div className="bg-surface-container-low border-4 border-on-surface p-8 hard-shadow relative overflow-hidden group">
-          <div className="relative z-10 flex flex-col md:flex-row gap-12 items-start">
-            <div className="flex-shrink-0 w-16 h-16 bg-on-surface text-white flex items-center justify-center text-3xl font-black font-headline border-4 border-on-surface hard-shadow-sm">B</div>
-            <div className="flex-grow">
-              <h3 className="text-2xl font-black font-headline uppercase tracking-tighter mb-4">The Power User Workflow</h3>
-              <p className="text-lg mb-8 leading-relaxed max-w-2xl text-on-surface/80">
-                Best for complex recordings and automated project management.
-              </p>
-              
-              <div className="space-y-6 max-w-3xl">
-                <div className="flex gap-4 items-center">
-                  <div className="bg-background border-2 border-on-surface px-4 py-2 font-mono text-sm flex items-center gap-4 flex-grow">
-                    <span className="text-primary font-bold">$</span>
-                    <span>swacn auth login &lt;token&gt;</span>
-                  </div>
-                  <Link to="/cli" className="bg-on-surface text-white p-2 border-2 border-on-surface hard-shadow-sm hover:scale-105 transition-transform">
-                    <Download size={20} />
-                  </Link>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white border-2 border-on-surface p-4">
-                    <div className="font-bold text-[10px] uppercase text-primary mb-2">1. Local Record</div>
-                    <code className="text-sm font-bold">$ swacn record --fs --keys</code>
-                    <p className="text-[10px] mt-2 opacity-50 italic">The --fs flag captures your current folder snapshot.</p>
-                  </div>
-                  <div className="bg-white border-2 border-on-surface p-4">
-                    <div className="font-bold text-[10px] uppercase text-primary mb-2">2. Remote Sync</div>
-                    <code className="text-sm font-bold">$ swacn upload</code>
-                    <p className="text-[10px] mt-2 opacity-50 italic">Uploads the manifest, filesystem, and cast.</p>
-                  </div>
-                </div>
-                
-                <div className="bg-error/10 border-l-4 border-error p-4">
-                  <h4 className="text-error font-black uppercase text-xs flex items-center gap-2 mb-2">
-                    <ShieldAlert size={14} /> Critical Security Note
-                  </h4>
-                  <p className="text-xs leading-relaxed font-medium">
-                    Running <code className="font-bold">--fs</code> will capture EVERYTHING in the current directory. <strong>Check for hidden files (.git, .env, .ssh)</strong> before running the record command.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 05. Advanced: swacn.json */}
-      <section className="mb-32">
-        <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">05. Advanced: swacn.json</h2>
-          <div className="h-[4px] flex-grow bg-on-surface"></div>
-        </div>
-
-        <div className="bg-white border-4 border-on-surface p-8 hard-shadow relative overflow-hidden group">
-          <div className="absolute -top-10 -right-10 text-on-surface opacity-5 transform group-hover:scale-110 transition-transform duration-700 pointer-events-none">
-            <FileJson size={300} />
-          </div>
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="bg-white border-4 border-on-surface p-12 hard-shadow relative overflow-hidden">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <p className="text-lg leading-relaxed text-on-surface/80 mb-6">
-                The <code className="bg-on-surface/10 px-2 py-0.5 rounded font-bold">swacn.json</code> file is the blueprint for your sandbox. 
+                The SWACN WebVM uses <strong>v86 hardware emulation</strong>. This means you are running a real x86 environment in the browser. 
               </p>
-              <div className="bg-primary/10 border-l-4 border-primary p-4 mb-6">
-                 <p className="text-sm font-bold text-primary uppercase mb-1">💡 Important Note</p>
-                 <p className="text-sm opacity-80">This file is <strong>only required if you use the CLI</strong>. If you use the Web Upload flow, we build this manifest for you based on the form data.</p>
+              <div className="bg-primary/5 border-l-4 border-primary p-6 mb-8 font-mono text-sm">
+                <h5 className="font-black uppercase mb-2 text-primary">Requirement Checklist:</h5>
+                <ul className="space-y-2">
+                  <li>• Architecture: <strong>x86 (32-bit/i386)</strong></li>
+                  <li>• Linking: <strong>Static</strong> (no dynamic libc dependencies)</li>
+                  <li>• OS: <strong>Linux</strong> compatible</li>
+                </ul>
               </div>
-              <div className="space-y-4">
-                <div className="border-l-4 border-primary pl-4 py-1">
-                  <span className="font-bold block text-sm mb-1 uppercase">project</span>
-                  <p className="text-sm opacity-70">The human-readable name of your workspace.</p>
-                </div>
-                <div className="border-l-4 border-primary pl-4 py-1">
-                  <span className="font-bold block text-sm mb-1 uppercase">env</span>
-                  <p className="text-sm opacity-70">Key-value pairs to set in the shell environment.</p>
-                </div>
-                <div className="border-l-4 border-primary pl-4 py-1">
-                  <span className="font-bold block text-sm mb-1 uppercase">binaries</span>
-                  <p className="text-sm opacity-70">Define the external tools to be installed in the environment.</p>
-                </div>
-              </div>
+              <p className="text-sm opacity-60 italic">
+                Pro-tip: Search for "linux-386" or "i386" in GitHub Releases. Most Go and Rust tools provide these.
+              </p>
             </div>
-            <div className="bg-background border-2 border-on-surface p-6 font-mono text-sm overflow-x-auto shadow-inner">
-<pre className="text-on-surface/90">{`{
-  "project": "my-awesome-cli",
-  "env": {
-    "PATH": "/usr/local/bin:/bin:/usr/bin",
-    "DEBUG": "true"
-  },
-  "binaries": {
-    "x86_32": [
-      {
-        "name": "yq",
-        "url": "https://.../yq_linux_386",
-        "install_path": "/usr/bin"
-      }
-    ]
-  }
-}`}</pre>
+            <div className="space-y-4">
+               <div className="bg-background border-2 border-on-surface p-4 font-mono text-xs">
+                  <div className="text-primary font-bold mb-2">// Binary Config in Lab</div>
+                  <div className="opacity-50">name=yq</div>
+                  <div className="opacity-50 break-all">url=https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_386</div>
+               </div>
+               <div className="bg-background border-2 border-on-surface p-4 font-mono text-xs">
+                  <div className="text-primary font-bold mb-2">// Environment Check</div>
+                  <div className="opacity-50">$ file ./my-tool</div>
+                  <div className="opacity-50">my-tool: ELF 32-bit LSB executable, Intel 80386, statically linked</div>
+               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 06. Polish & Customization */}
+      {/* 05. Advanced Config */}
       <section className="mb-32">
         <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">06. Polish & Customization</h2>
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">05. Advanced Controls</h2>
           <div className="h-[4px] flex-grow bg-on-surface"></div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Themes */}
-          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-6">
-            <div className="bg-surface-container-high p-3 border-2 border-on-surface w-max">
-              <Settings size={24} className="text-primary" />
-            </div>
-            <h3 className="text-2xl font-black font-headline uppercase tracking-tighter">Terminal Aesthetics</h3>
-            <p className="text-on-surface/70 leading-relaxed">
-              Personalize your sandbox from the Dashboard. We support the full <strong>Catppuccin</strong> palette (Mocha, Latte, Frappe, Macchiato) for the terminal UI.
-            </p>
-            <div className="mt-auto flex gap-2">
-              <div className="w-6 h-6 bg-[#1e1e2e] border border-on-surface"></div>
-              <div className="w-6 h-6 bg-[#eff1f5] border border-on-surface"></div>
-              <div className="w-6 h-6 bg-[#303446] border border-on-surface"></div>
-              <div className="w-6 h-6 bg-[#24273a] border border-on-surface"></div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="bg-white border-4 border-on-surface p-8 hard-shadow">
+              <div className="w-12 h-12 bg-surface-container-high border-2 border-on-surface flex items-center justify-center mb-6">
+                <Settings size={24} className="text-primary" />
+              </div>
+              <h3 className="text-2xl font-black uppercase font-headline tracking-tighter mb-4">Environment Injection</h3>
+              <p className="text-on-surface/70 leading-relaxed text-sm mb-6">
+                Inject custom variables into the shell session. These are available in both the interactive terminal and your <code className="font-bold">init.sh</code> script.
+              </p>
+              <div className="bg-background p-4 border-2 border-on-surface font-mono text-[10px]">
+                API_KEY=********<br/>
+                DEBUG=true<br/>
+                THEME=nord
+              </div>
+           </div>
 
-          {/* welcome.txt */}
-          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-6 relative overflow-hidden">
-             <div className="absolute top-4 right-4 text-primary animate-pulse">
-                <Sparkles size={24} />
-             </div>
-            <h3 className="text-2xl font-black font-headline uppercase tracking-tighter">Custom Greeting</h3>
-            <p className="text-on-surface/70 leading-relaxed">
-              Add a <code className="font-bold">welcome.txt</code> to your root folder. It will be automatically printed to the terminal screen the moment a user launches the sandbox.
-            </p>
-            <div className="bg-background/10 border-2 border-on-surface/20 p-3 font-mono text-[10px] italic">
-              $ cat welcome.txt<br/>
-              "Welcome to the sandbox! Run 'ls' to see my code."
-            </div>
-          </div>
+           <div className="bg-white border-4 border-on-surface p-8 hard-shadow">
+              <div className="w-12 h-12 bg-surface-container-high border-2 border-on-surface flex items-center justify-center mb-6">
+                <Globe size={24} className="text-primary" />
+              </div>
+              <h3 className="text-2xl font-black uppercase font-headline tracking-tighter mb-4">Project Visibility</h3>
+              <p className="text-on-surface/70 leading-relaxed text-sm mb-6">
+                Manage who can see your lab. Pro users can toggle projects between Public and Private from the Dashboard or Project Modal.
+              </p>
+              <div className="flex gap-4">
+                 <div className="flex items-center gap-2 text-xs font-black opacity-40">
+                    <Globe size={14} /> PUBLIC
+                 </div>
+                 <div className="flex items-center gap-2 text-xs font-black text-primary">
+                    <Lock size={14} /> PRIVATE (PRO ONLY)
+                 </div>
+              </div>
+           </div>
         </div>
       </section>
 
-      {/* 07. Privacy & Limits */}
+      {/* 06. Polish */}
       <section className="mb-32">
         <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">07. Privacy & Limits</h2>
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter flex items-center gap-4">
+            <Sparkles className="text-primary" /> 06. Terminal Aesthetics
+          </h2>
+          <div className="h-[4px] flex-grow bg-on-surface/10"></div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+           <div className="bg-on-surface text-background p-12 hard-shadow">
+              <h3 className="text-2xl font-black uppercase font-headline tracking-tighter mb-4 text-white">Color Palettes</h3>
+              <p className="text-white/70 leading-relaxed mb-8">
+                SWACN supports native brand themes and the full <strong>Catppuccin</strong> color palette. Personalize your terminal experience via the Lab settings.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#fcf9f0] border border-white/20"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">SWACN</span>
+                 </div>
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#1c1c17]"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">Dark</span>
+                 </div>
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#eff1f5]"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">Latte</span>
+                 </div>
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#303446]"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">Frappe</span>
+                 </div>
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#24273a]"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">Macchiato</span>
+                 </div>
+                 <div className="flex items-center gap-3 bg-white/10 border-2 border-white/20 px-4 py-2">
+                    <div className="w-4 h-4 bg-[#1e1e2e]"></div>
+                    <span className="font-mono text-[10px] font-black uppercase text-white">Mocha</span>
+                 </div>
+              </div>
+           </div>
+
+           <div className="bg-primary text-white p-12 hard-shadow flex flex-col justify-center">
+              <h3 className="text-2xl font-black uppercase font-headline tracking-tighter mb-4">Keyboard HUD</h3>
+              <p className="text-white/80 leading-relaxed text-sm mb-6">
+                Enhance your screencasts with our built-in <strong>Keystroke Visualizer</strong>. During playback, a tactile HUD overlays real-time inputs. To enable this, record your session with the <code>--stdin</code> flag:
+              </p>
+              <div className="bg-on-surface p-4 border-2 border-white/20 font-mono text-xs mb-8">
+                $ asciinema rec --stdin project.cast
+              </div>
+              <div className="flex justify-center">
+                 <div className="bg-white text-primary border-4 border-on-surface px-8 py-4 font-mono font-black hard-shadow flex items-center gap-4">
+                    <span className="tracking-tighter text-2xl uppercase">Ctrl + C</span>
+                    <span className="bg-primary text-white border-2 border-on-surface text-xs px-2 py-0.5 uppercase">x1</span>
+                 </div>
+              </div>
+           </div>
+        </div>
+      </section>
+
+      {/* 07. Security */}
+      <section className="mb-32">
+        <div className="flex items-center gap-4 mb-12">
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter text-error">07. Security & Privacy</h2>
           <div className="h-[4px] flex-grow bg-error/20"></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-error text-white p-8 border-4 border-on-surface hard-shadow flex flex-col gap-6">
-            <div className="bg-white text-error p-3 border-2 border-on-surface w-max">
-              <ShieldAlert size={32} />
-            </div>
-            <h3 className="text-3xl font-black font-headline uppercase tracking-tighter">Nothing is Hidden</h3>
-            <p className="text-lg leading-relaxed opacity-90">
-              The "Disable Download" toggle in settings is a UI visual only. Determined users can always extract files from the browser VM state.
-            </p>
-            <p className="font-black uppercase text-sm underline decoration-white/50 underline-offset-4">
-              Never upload sensitive credentials.
-            </p>
-          </div>
+           <div className="bg-white border-4 border-error p-8 hard-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                 <div className="w-12 h-12 bg-error text-white flex items-center justify-center">
+                    <Lock size={24} />
+                 </div>
+                 <h3 className="text-2xl font-black uppercase font-headline tracking-tighter">Private Labs</h3>
+              </div>
+              <p className="text-on-surface/70 leading-relaxed text-sm">
+                Pro projects are secured by role-based access control. Unauthorized users cannot boot the VM or download the filesystem assets. However, once a user is authorized, assets are cached locally for performance.
+              </p>
+           </div>
 
-          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-6">
-             <div className="bg-surface-container-high p-3 border-2 border-on-surface w-max">
-              <Box size={32} />
-            </div>
-            <h3 className="text-3xl font-black font-headline uppercase tracking-tighter">Platform Constraints</h3>
-            <ul className="space-y-4 font-mono text-base">
-              <li className="flex items-center gap-4">
-                <div className="w-3 h-3 bg-primary"></div>
-                <span className="font-bold">Max 15 Active Projects</span>
-              </li>
-              <li className="flex items-center gap-4">
-                <div className="w-3 h-3 bg-primary"></div>
-                <span className="font-bold text-error">2MB Max Payload Size</span>
-              </li>
-              <li className="flex items-center gap-4">
-                <div className="w-3 h-3 bg-primary"></div>
-                <span className="font-bold">Public URLs by Default</span>
-              </li>
-            </ul>
-          </div>
+           <div className="bg-error text-white p-8 hard-shadow flex flex-col md:flex-row gap-6 items-center">
+              <ShieldAlert size={60} className="shrink-0" />
+              <div>
+                 <h3 className="text-xl font-black uppercase font-headline tracking-tighter mb-2">Memory Forensics</h3>
+                 <p className="text-sm opacity-90">
+                   Since the VM runs in-browser, any authorized user can extract files directly from memory. <strong>Never upload production credentials or sensitive PII.</strong>
+                 </p>
+              </div>
+           </div>
         </div>
       </section>
 
-      {/* Deep Dive Footer */}
-      <div className="mt-32 border-t-4 border-on-surface pt-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-        <div>
-          <h2 className="font-headline text-2xl font-black uppercase tracking-tighter text-on-surface">Infrastructure</h2>
-          <p className="font-mono text-sm mt-2 max-w-lg text-on-surface/60">
-            Powered by a high-performance C++ backend, deduplicated storage engine, and v86 hardware emulation.
-          </p>
-        </div>
-        <div className="flex gap-4 opacity-50 grayscale">
-          <Box size={32} />
-          <FileTerminal size={32} />
-          <ServerCog size={32} />
-        </div>
-      </div>
 
     </div>
   );

@@ -58,6 +58,7 @@ CREATE TABLE projects (
     show_keystrokes BOOLEAN DEFAULT TRUE,
     allow_fs_download BOOLEAN DEFAULT TRUE,
     embed_theme VARCHAR(255) DEFAULT 'dark',
+    is_public BOOLEAN DEFAULT TRUE,
     
     deleted_at TIMESTAMP DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

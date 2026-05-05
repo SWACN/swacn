@@ -40,8 +40,16 @@ export async function fetchCasts() {
 }
 
 export async function fetchCastDetails(id: string) {
-  const res = await fetch(`/api/v1/casts/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch cast details");
+  const token = getAuthToken();
+  const headers: any = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/v1/casts/${id}`, { headers });
+  if (!res.ok) {
+    const err = new Error("Failed to fetch cast details") as any;
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 

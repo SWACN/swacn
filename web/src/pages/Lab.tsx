@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut, ChevronLeft, ChevronRight, Lock as LockIcon, LogIn } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
@@ -56,6 +56,7 @@ export function Lab() {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [copiedEmbedCast, setCopiedEmbedCast] = useState(false);
@@ -96,10 +97,12 @@ export function Lab() {
   const lastKeyTimeRef = useRef<number>(-1);
 
   const isDefaultSandbox = !id;
-  const manifestUrl = id ? `/uploads/${id}/manifest.json` : null;
-  const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz` : null;
+  const manifestUrl = id ? `/uploads/${id}/manifest.json${token ? `?token=${token}` : ''}` : null;
+  const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz${token ? `?token=${token}` : ''}` : null;
   const currentCast = casts[activeCastIndex];
-  const recordingUrl = currentCast ? `/uploads/${currentCast.recording_url}` : (id && hasRecording ? `/uploads/${id}/recording.cast` : null);
+  const recordingUrl = currentCast 
+    ? `/uploads/${currentCast.recording_url}${token ? `?token=${token}` : ''}` 
+    : (id && hasRecording ? `/uploads/${id}/recording.cast${token ? `?token=${token}` : ''}` : null);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
@@ -217,8 +220,10 @@ export function Lab() {
         setHasRecording(details.has_recording);
         if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
+        setLoadError(null);
       }).catch(err => {
         console.error("Failed to fetch cast details", err);
+        if (err.status) setLoadError(err.status);
         setHasRecording(true);
         setIsSandboxMode(false);
       });
@@ -672,6 +677,55 @@ export function Lab() {
     return null;
   };
 
+  if (loadError === 401 || loadError === 403) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-screen font-sans transition-colors duration-300 p-4 md:p-8 bg-background text-on-surface">
+        <div className="border-4 p-6 md:p-10 flex flex-col items-center text-center w-full max-w-xl bg-white border-on-surface hard-shadow">
+          <LockIcon size={64} className="text-error mb-6" />
+          <h1 className="text-4xl md:text-5xl font-black font-headline uppercase tracking-tighter mb-4 leading-none">Access Denied</h1>
+          <p className="text-base md:text-lg leading-relaxed opacity-80 font-medium mb-8">
+            This project is private. You must be authenticated and authorized by the owner to access this sandbox.
+          </p>
+          <button 
+            onClick={() => {
+              const width = 600, height = 700;
+              const left = (window.screen.width / 2) - (width / 2);
+              const top = (window.screen.height / 2) - (height / 2);
+              const handshakeId = Math.random().toString(36).substring(2, 15);
+              
+              const pollInterval = setInterval(async () => {
+                try {
+                  const res = await fetch(`/api/auth/poll?handshake_id=${handshakeId}`);
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.token) {
+                      clearInterval(pollInterval);
+                      setAuthToken(data.token);
+                      setToken(data.token);
+                      if (authChannelRef.current) {
+                        authChannelRef.current.postMessage({ type: 'SWACN_AUTH', token: data.token });
+                      }
+                      setLoadError(null);
+                      refreshProjects();
+                    }
+                  }
+                } catch (e) {}
+              }, 1000);
+              setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+              window.open(`/api/auth/github/login?popup=true&handshake_id=${handshakeId}`, 'swacn_auth', `width=${width},height=${height},left=${left},top=${top}`);
+            }}
+            className="w-full sm:w-auto px-8 py-4 font-black uppercase tracking-widest transition-transform hover:-translate-y-1 hover:translate-x-1 active:translate-y-0 active:translate-x-0 flex justify-center items-center gap-3 border-4 bg-primary text-white border-on-surface hard-shadow"
+          >
+            <LogIn size={24} /> Verify Access
+          </button>
+          {!isEmbed && (
+            <a href="/" className="mt-8 text-sm font-bold uppercase tracking-widest underline decoration-2 underline-offset-4 opacity-50 hover:opacity-100 transition-opacity font-mono">Return Home</a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex-grow flex flex-col md:flex-row relative ${isEmbed ? 'h-full border-b-0 bg-background overflow-hidden' : 'w-full px-4 md:px-8 lg:px-16 xl:px-24 pb-4 md:pb-8 h-[calc(100vh-6rem)] md:h-[calc(100vh-8rem)]'}`}>
       
@@ -1001,9 +1055,11 @@ export function Lab() {
                           transform: `scale(${1 - (age * 0.05)})`,
                         }}
                       >
-                        <div className={`bg-primary text-white border-on-surface font-mono font-black hard-shadow flex items-center gap-4 justify-center ${isEmbed ? 'px-4 py-2 border-2 text-lg min-w-[3rem]' : 'px-8 py-4 border-4 text-2xl min-w-[4rem]'}`}>
+                        <div className={`bg-primary text-white font-mono font-black flex items-center gap-4 justify-center 
+                          ${isDarkTheme ? (isEmbed ? 'hard-shadow-sm-light border-[#402208]' : 'hard-shadow-light border-[#402208]') : (isEmbed ? 'hard-shadow-sm border-on-surface' : 'hard-shadow border-on-surface')}
+                          ${isEmbed ? 'px-4 py-2 border-2 text-lg min-w-[3rem]' : 'px-8 py-4 border-4 text-2xl min-w-[4rem]'}`}>
                           <span className="tracking-tighter">{k.k}</span>
-                          {k.count > 1 && <span className={`bg-white text-primary border-on-surface font-bold uppercase ${isEmbed ? 'text-xs px-1.5 py-0 border-2' : 'text-sm px-2 py-0.5 border-2'}`}>x{k.count}</span>}
+                          {k.count > 1 && <span className={`bg-white text-primary font-bold uppercase ${isDarkTheme ? 'border-[#402208]' : 'border-on-surface'} ${isEmbed ? 'text-xs px-1.5 py-0 border-2' : 'text-sm px-2 py-0.5 border-2'}`}>x{k.count}</span>}
                         </div>
                       </div>
                     );
@@ -1060,7 +1116,7 @@ export function Lab() {
                   className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
                 >
                   {copiedEmbed ? <Check size={16} /> : <Share2 size={16} />} 
-                  {copiedEmbed ? 'Copied!' : 'Embed Full Project'}
+                  {copiedEmbed ? 'Copied!' : (casts.length > 1 ? 'Embed Full Project' : 'Embed Project')}
                 </button>
               </div>
             )}

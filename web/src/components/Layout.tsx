@@ -145,7 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <footer className="bg-background border-t-4 border-on-surface flex flex-col md:flex-row justify-between items-center px-6 py-8 w-full font-mono text-xs uppercase tracking-widest">
         <div className="mb-4 md:mb-0 text-on-surface">(c) 2026 SWACN</div>
         <div className="flex gap-8 items-center">
-          <Link to="/cli" className="text-on-surface hover:text-primary">CLI Access</Link>
+
           <Link to="/terms" className="text-on-surface hover:text-primary">Terms</Link>
           <a className="text-on-surface hover:text-primary" href="#">Discord</a>
           {token && (

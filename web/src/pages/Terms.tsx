@@ -28,7 +28,7 @@ export function Terms() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 text-on-surface/80">
           <div>
             <p className="text-xl leading-relaxed mb-8">
-              SWACN is provided as a managed service. All components, including the CLI, server infrastructure, and web client, are the property of SWACN.
+              SWACN is provided as a managed service. All components, including the server infrastructure and web client, are the property of SWACN.
             </p>
             <div className="space-y-6">
               <div className="flex gap-4">
