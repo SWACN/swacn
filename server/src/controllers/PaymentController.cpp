@@ -3,49 +3,8 @@
 #include <drogon/utils/Utilities.h>
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
-#include <iomanip>
-#include <sstream>
 #include <cstdlib>
 
-// ---------------------------------------------------------------------------
-// Helper: HMAC-SHA256 verification for Dodo Payments webhooks
-// ---------------------------------------------------------------------------
-bool PaymentController::verifyWebhookSignature(
-    const std::string& payload,
-    const std::string& signature,
-    const std::string& secret)
-{
-    unsigned char digest[EVP_MAX_MD_SIZE];
-    unsigned int digest_len = 0;
-
-    HMAC(
-        EVP_sha256(),
-        secret.c_str(), static_cast<int>(secret.size()),
-        reinterpret_cast<const unsigned char*>(payload.c_str()),
-        payload.size(),
-        digest,
-        &digest_len
-    );
-
-    std::ostringstream oss;
-    for (unsigned int i = 0; i < digest_len; ++i) {
-        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(digest[i]);
-    }
-    std::string computed = oss.str();
-
-    // Dodo Payments sends: "sha256=<hex_digest>"
-    std::string expected = "sha256=" + computed;
-
-    // Constant-time comparison to prevent timing attacks
-    if (expected.size() != signature.size()) return false;
-    unsigned char result = 0;
-    for (size_t i = 0; i < expected.size(); ++i) {
-        result |= expected[i] ^ signature[i];
-    }
-    return result == 0;
-}
-
-// ---------------------------------------------------------------------------
 // POST /api/v1/payments/checkout
 // Creates a Dodo Payments checkout session and returns the checkout_url.
 // ---------------------------------------------------------------------------
@@ -116,7 +75,8 @@ void PaymentController::createCheckout(
             checkout_body["product_cart"].append(cart_item);
             
             checkout_body["success_url"] = success_url;
-            checkout_body["return_url"] = success_url;
+            checkout_body["cancel_url"]  = cancel_url;
+            checkout_body["return_url"]  = app_url ? std::string(app_url) + "/dashboard" : "http://localhost:3000/dashboard";
             
             // Pass user metadata so webhook can identify the user (Dodo requires strings)
             Json::Value metadata;
@@ -201,11 +161,60 @@ void PaymentController::webhook(
     }
 
     // 1. Verify the signature
-    std::string signature = req->getHeader("webhook-signature");
-    std::string payload   = std::string(req->getBody());
+    std::string signature_header = req->getHeader("x-dodo-signature");
+    if (signature_header.empty()) {
+        signature_header = req->getHeader("webhook-signature");
+    }
 
-    if (signature.empty() || !verifyWebhookSignature(payload, signature, std::string(webhook_secret))) {
-        LOG_WARN << "Dodo webhook: invalid signature. Rejecting.";
+    // Dodo/Svix format: "v1,base64_sig"
+    // Also requires webhook-id and webhook-timestamp headers
+    std::string msg_id = req->getHeader("webhook-id");
+    std::string msg_timestamp = req->getHeader("webhook-timestamp");
+    std::string payload = std::string(req->getBody());
+
+    if (signature_header.empty() || msg_id.empty() || msg_timestamp.empty()) {
+        LOG_WARN << "Dodo webhook: missing required headers. ID: " << msg_id << " TS: " << msg_timestamp;
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(drogon::k401Unauthorized);
+        callback(resp);
+        return;
+    }
+
+    // The signature we need to verify is after "v1,"
+    std::string signature = "";
+    size_t comma_pos = signature_header.find(',');
+    if (comma_pos != std::string::npos) {
+        signature = signature_header.substr(comma_pos + 1);
+    } else {
+        signature = signature_header;
+    }
+
+    // Signing payload is: id + "." + timestamp + "." + body
+    std::string to_sign = msg_id + "." + msg_timestamp + "." + payload;
+    
+    // Calculate HMAC-SHA256
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    const char* secret_env = getenv("DODO_PAYMENTS_WEBHOOK_SECRET");
+    std::string secret_raw = secret_env ? secret_env : "";
+    
+    // Svix/Dodo secrets start with "whsec_" and the rest is base64
+    std::string secret_b64 = secret_raw;
+    if (secret_raw.find("whsec_") == 0) {
+        secret_b64 = secret_raw.substr(6);
+    }
+    
+    // Decode the base64 secret
+    std::string decoded_secret = drogon::utils::base64Decode(secret_b64);
+
+    HMAC(EVP_sha256(), decoded_secret.c_str(), (int)decoded_secret.size(), 
+         (const unsigned char*)to_sign.c_str(), to_sign.size(), digest, &digest_len);
+
+    // Base64 encode the digest
+    std::string expected = drogon::utils::base64Encode(digest, digest_len);
+
+    if (expected != signature) {
+        LOG_WARN << "Dodo webhook: signature mismatch. Expected: " << expected << " Got: " << signature;
         auto resp = drogon::HttpResponse::newHttpResponse();
         resp->setStatusCode(drogon::k401Unauthorized);
         callback(resp);
@@ -273,7 +282,8 @@ void PaymentController::webhook(
 
     } else if (event_type == "subscription.cancelled" ||
                event_type == "subscription.expired"   ||
-               event_type == "subscription.failed") {
+               event_type == "subscription.failed"    ||
+               event_type == "payment.failed") {
 
         dbClient->execSqlAsync(
             "UPDATE users SET is_pro = FALSE, updated_at = NOW() WHERE id = $1",

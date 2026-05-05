@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo, Zap, Star, Lock, Loader2 } from 'lucide-react';
+import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo, Zap, Star, Lock, Loader2, X } from 'lucide-react';
 import { fetchCasts, fetchMe, getAuthToken, deleteCast, createCheckoutSession } from '../lib/api';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -14,6 +14,7 @@ export function Dashboard() {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const paymentStatus = searchParams.get('payment');
+  const isPro = user?.is_pro;
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -25,10 +26,43 @@ export function Dashboard() {
       .then(([castsData, userData]) => {
         setCasts(castsData);
         setUser(userData);
+        
+        // Clear query params if payment was successful to avoid banner sticking
+        if (searchParams.get('payment') === 'success') {
+          setTimeout(() => {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('payment');
+            window.history.replaceState({}, '', url.toString());
+          }, 3000);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const [verificationTimeout, setVerificationTimeout] = useState(false);
+
+  useEffect(() => {
+    let interval: any;
+    let timeout: any;
+    
+    if (paymentStatus === 'success' && !isPro && !verificationTimeout) {
+      interval = setInterval(() => {
+        fetchMe().then(setUser).catch(console.error);
+      }, 3000);
+
+      // Stop trying after 15 seconds
+      timeout = setTimeout(() => {
+        setVerificationTimeout(true);
+        clearInterval(interval);
+      }, 15000);
+    }
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [paymentStatus, isPro, verificationTimeout]);
 
   if (loading) {
     return (
@@ -83,20 +117,40 @@ export function Dashboard() {
     }
   };
 
-  const isPro = user?.is_pro;
+
 
   return (
     <div className="w-full px-4 md:px-8 lg:px-16 xl:px-24 py-4 lg:py-8">
       
-      {/* Payment Success Banner */}
+      {/* Payment Status Banners */}
       {paymentStatus === 'success' && (
-        <div className="mb-8 border-4 border-on-surface bg-primary text-white p-5 hard-shadow flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
-          <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-2 border-white flex-shrink-0">
-            <Star size={20} fill="currentColor" />
+        <div className={`mb-8 border-4 border-on-surface p-5 hard-shadow flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500 ${isPro ? 'bg-primary text-white' : 'bg-white text-on-surface'}`}>
+          <div className={`w-10 h-10 flex items-center justify-center border-2 flex-shrink-0 ${isPro ? 'bg-white text-primary border-white' : 'bg-surface-container-high border-on-surface'}`}>
+            {isPro ? <Star size={20} fill="currentColor" /> : (verificationTimeout ? <AlertTriangle size={20} className="text-red-500" /> : <Loader2 size={20} className="animate-spin" />)}
           </div>
           <div>
-            <p className="font-mono font-black uppercase text-sm tracking-widest">Pro Activated!</p>
-            <p className="font-mono text-xs opacity-80 mt-0.5">Your subscription is confirmed. All Pro features are now unlocked.</p>
+            <p className="font-mono font-black uppercase text-sm tracking-widest">
+              {isPro ? 'Pro Activated!' : (verificationTimeout ? 'Verification Delayed' : 'Verifying Payment...')}
+            </p>
+            <p className="font-mono text-xs opacity-80 mt-0.5">
+              {isPro 
+                ? 'Your subscription is confirmed. All Pro features are now unlocked.' 
+                : (verificationTimeout 
+                    ? 'Confirmation is taking longer than expected. Please refresh in a moment or contact support if the issue persists.' 
+                    : 'We are waiting for the payment confirmation. This will update automatically in a few seconds.')}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {paymentStatus === 'cancelled' && (
+        <div className="mb-8 border-4 border-on-surface bg-white p-5 hard-shadow flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
+          <div className="w-10 h-10 bg-surface-container-high text-on-surface/50 flex items-center justify-center border-2 border-on-surface flex-shrink-0">
+            <X size={20} />
+          </div>
+          <div>
+            <p className="font-mono font-black uppercase text-sm tracking-widest text-on-surface/60">Payment Cancelled</p>
+            <p className="font-mono text-xs opacity-60 mt-0.5">Your payment process was cancelled. No charges were made.</p>
           </div>
         </div>
       )}
@@ -128,16 +182,26 @@ export function Dashboard() {
             {casts.length} Modules Online
           </div>
           {isPro && (
-            <div className="flex items-center gap-2 font-mono text-xs uppercase font-bold text-white bg-on-surface px-4 py-2 border-2 border-on-surface">
-              <Star size={12} fill="currentColor" />
-              Pro Member
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2 font-mono text-xs uppercase font-bold text-white bg-on-surface px-4 py-2 border-2 border-on-surface">
+                <Star size={12} fill="currentColor" />
+                Pro Member
+              </div>
+              <a 
+                href="https://customer.dodopayments.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="font-mono text-[10px] uppercase font-bold text-on-surface/60 hover:text-primary transition-colors flex items-center gap-1"
+              >
+                Manage Subscription <ArrowRight size={10} />
+              </a>
             </div>
           )}
         </div>
       </div>
 
-      {/* Pro Upgrade Banner (only for free users) */}
-      {!isPro && (
+      {/* Pro Upgrade Banner (only for free users and if not just finished paying) */}
+      {!isPro && paymentStatus !== 'success' && (
         <div className="mb-10 relative border-4 border-on-surface hard-shadow overflow-hidden">
           {/* Background gradient strip */}
           <div className="absolute inset-0 bg-gradient-to-r from-on-surface via-on-surface/90 to-primary pointer-events-none" />

@@ -15,8 +15,4 @@ class PaymentController : public drogon::HttpController<PaymentController> {
     // POST /api/webhooks/dodopayments
     // Receives events from Dodo Payments (no auth token, uses HMAC signature verification).
     void webhook(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback);
-
-  private:
-    // Verifies the Dodo Payments webhook signature using HMAC-SHA256
-    bool verifyWebhookSignature(const std::string& payload, const std::string& signature, const std::string& secret);
 };
