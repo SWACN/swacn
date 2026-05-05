@@ -202,64 +202,57 @@ export function Dashboard() {
 
       {/* Pro Upgrade Banner (only for free users and if not just finished paying) */}
       {!isPro && paymentStatus !== 'success' && (
-        <div className="mb-10 relative border-4 border-on-surface hard-shadow overflow-hidden">
-          {/* Background gradient strip */}
-          <div className="absolute inset-0 bg-gradient-to-r from-on-surface via-on-surface/90 to-primary pointer-events-none" />
+        <div className="mb-10 border-4 border-on-surface bg-surface-container-high p-8 hard-shadow relative overflow-hidden">
+          {/* Subtle background icon */}
+          <div className="absolute right-0 top-0 w-32 h-32 opacity-[0.03] pointer-events-none translate-x-8 -translate-y-8">
+             <Zap size={128} fill="currentColor" />
+          </div>
           
-          <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-start gap-5">
-              <div className="w-12 h-12 bg-white/10 border-2 border-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
-                <Zap size={24} className="text-yellow-400" fill="currentColor" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-xs font-bold uppercase text-white/50 tracking-widest">Upgrade</span>
-                  <span className="font-mono text-xs font-bold uppercase text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-2 py-0.5">Pro</span>
+          <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="bg-on-surface text-white px-3 py-1 font-mono text-[10px] font-black uppercase tracking-tighter">
+                  Status: Standard
                 </div>
-                <h2 className="font-headline font-black text-2xl md:text-3xl text-white uppercase tracking-tight leading-tight mb-2">
-                  Unlock Pro Features
-                </h2>
-                <p className="font-mono text-sm text-white/60 max-w-lg">
-                  Import projects, create Super Projects with persistent VMs, and get priority access to new features.
-                </p>
+                <div className="border-2 border-on-surface/20 px-3 py-1 font-mono text-[10px] font-bold uppercase text-on-surface/40">
+                  Upgrade Available
+                </div>
               </div>
+              
+              <h2 className="font-headline font-black text-3xl md:text-4xl text-on-surface uppercase tracking-tight leading-none mb-4">
+                Need more? Go Pro.
+              </h2>
+              
+              <p className="font-mono text-sm text-on-surface/70 leading-relaxed">
+                Upgrade for higher project quotas, Super Project support, private projects, and prioritized feature access. 
+                It helps me pay for the servers and keep this project alive. 
+                No marketing fluff, just better tools.
+              </p>
             </div>
 
-            <div className="flex flex-col items-start md:items-end gap-3 flex-shrink-0">
+            <div className="flex flex-col items-start lg:items-end gap-3">
               {upgradeError && (
-                <p className="font-mono text-xs text-red-400 max-w-xs text-right">{upgradeError}</p>
+                <p className="font-mono text-xs text-red-600 max-w-xs lg:text-right font-bold uppercase">{upgradeError}</p>
               )}
               <button
                 id="upgrade-to-pro-btn"
                 onClick={handleUpgrade}
                 disabled={isUpgrading}
-                className="group flex items-center gap-3 bg-white text-on-surface border-2 border-white/20 px-6 py-3.5 font-mono text-sm font-black uppercase tracking-widest hover:-translate-y-0.5 hover:-translate-x-0.5 transition-all hard-shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                className="group flex items-center gap-4 bg-on-surface text-white px-8 py-5 font-mono text-sm font-black uppercase tracking-widest hover:-translate-y-1 hover:-translate-x-1 transition-all hard-shadow active:translate-x-0 active:translate-y-0 disabled:opacity-50 disabled:transform-none"
               >
                 {isUpgrading ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Redirecting...
+                    <Loader2 size={18} className="animate-spin" />
+                    Initializing...
                   </>
                 ) : (
                   <>
-                    <Star size={16} fill="currentColor" className="text-yellow-500" />
                     Upgrade to Pro
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>
-              <p className="font-mono text-xs text-white/30">Powered by Dodo Payments · Secure Checkout</p>
             </div>
-          </div>
-
-          {/* Pro feature pills */}
-          <div className="relative z-10 border-t-2 border-white/10 px-6 md:px-8 py-3 flex flex-wrap gap-x-6 gap-y-2">
-            {['Import Projects', 'Super Projects', 'Persistent VM State', 'Priority Support'].map(feature => (
-              <div key={feature} className="flex items-center gap-1.5 font-mono text-xs text-white/50">
-                <Check size={11} className="text-yellow-400" />
-                {feature}
-              </div>
-            ))}
           </div>
         </div>
       )}

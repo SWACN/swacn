@@ -60,7 +60,7 @@ export function Guide() {
             </ul>
             
             <div className="mt-auto pt-8 border-t-2 border-dashed border-on-surface/10">
-              <span className="text-2xl font-black font-mono">$0 / month</span>
+              <span className="text-2xl font-black font-mono">$0/month</span>
             </div>
           </div>
 
@@ -94,7 +94,7 @@ export function Guide() {
             </ul>
             
             <div className="mt-auto pt-8 border-t-2 border-dashed border-background/20">
-              <span className="text-2xl font-black font-mono">$10 / month</span>
+              <span className="text-2xl font-black font-mono">$10/month</span>
             </div>
           </div>
         </div>
