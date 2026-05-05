@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo } from 'lucide-react';
-import { fetchCasts, getAuthToken, deleteCast } from '../lib/api';
-import { Link } from 'react-router-dom';
+import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo, Zap, Star, Lock, Loader2 } from 'lucide-react';
+import { fetchCasts, fetchMe, getAuthToken, deleteCast, createCheckoutSession } from '../lib/api';
+import { Link, useSearchParams } from 'react-router-dom';
 
 export function Dashboard() {
   const [casts, setCasts] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingCastId, setDeletingCastId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const paymentStatus = searchParams.get('payment');
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -16,8 +21,11 @@ export function Dashboard() {
       return;
     }
 
-    fetchCasts()
-      .then(setCasts)
+    Promise.all([fetchCasts(), fetchMe()])
+      .then(([castsData, userData]) => {
+        setCasts(castsData);
+        setUser(userData);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -63,11 +71,45 @@ export function Dashboard() {
     }
   };
 
+  const handleUpgrade = async () => {
+    setIsUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const { checkout_url } = await createCheckoutSession();
+      window.location.href = checkout_url;
+    } catch (err: any) {
+      setUpgradeError(err.message || 'Failed to start checkout. Please try again.');
+      setIsUpgrading(false);
+    }
+  };
+
+  const isPro = user?.is_pro;
+
   return (
     <div className="w-full px-4 md:px-8 lg:px-16 xl:px-24 py-4 lg:py-8">
       
+      {/* Payment Success Banner */}
+      {paymentStatus === 'success' && (
+        <div className="mb-8 border-4 border-on-surface bg-primary text-white p-5 hard-shadow flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
+          <div className="w-10 h-10 bg-white text-primary flex items-center justify-center border-2 border-white flex-shrink-0">
+            <Star size={20} fill="currentColor" />
+          </div>
+          <div>
+            <p className="font-mono font-black uppercase text-sm tracking-widest">Pro Activated!</p>
+            <p className="font-mono text-xs opacity-80 mt-0.5">Your subscription is confirmed. All Pro features are now unlocked.</p>
+          </div>
+        </div>
+      )}
+
+      {paymentStatus === 'cancelled' && (
+        <div className="mb-8 border-4 border-on-surface bg-surface-container-high p-5 hard-shadow flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
+          <AlertTriangle size={20} className="flex-shrink-0 text-on-surface/60" />
+          <p className="font-mono text-sm text-on-surface/70">Checkout was cancelled. No charges were made.</p>
+        </div>
+      )}
+
       {/* Header Panel */}
-      <div className="mb-16 border-4 border-on-surface bg-white p-8 md:p-12 hard-shadow relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center">
+      <div className="mb-10 border-4 border-on-surface bg-white p-8 md:p-12 hard-shadow relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center">
         <div className="absolute -right-16 -bottom-16 opacity-5 pointer-events-none text-on-surface">
            <Grid size={300} strokeWidth={1} />
         </div>
@@ -81,10 +123,82 @@ export function Dashboard() {
           </p>
         </div>
         
-        <div className="relative z-10 mt-8 md:mt-0 font-mono text-xs uppercase font-bold text-on-surface/50 border-2 border-on-surface/20 px-4 py-2 bg-surface-container-high">
-          {casts.length} Modules Online
+        <div className="relative z-10 mt-8 md:mt-0 flex flex-col items-start md:items-end gap-3">
+          <div className="font-mono text-xs uppercase font-bold text-on-surface/50 border-2 border-on-surface/20 px-4 py-2 bg-surface-container-high">
+            {casts.length} Modules Online
+          </div>
+          {isPro && (
+            <div className="flex items-center gap-2 font-mono text-xs uppercase font-bold text-white bg-on-surface px-4 py-2 border-2 border-on-surface">
+              <Star size={12} fill="currentColor" />
+              Pro Member
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Pro Upgrade Banner (only for free users) */}
+      {!isPro && (
+        <div className="mb-10 relative border-4 border-on-surface hard-shadow overflow-hidden">
+          {/* Background gradient strip */}
+          <div className="absolute inset-0 bg-gradient-to-r from-on-surface via-on-surface/90 to-primary pointer-events-none" />
+          
+          <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-start gap-5">
+              <div className="w-12 h-12 bg-white/10 border-2 border-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+                <Zap size={24} className="text-yellow-400" fill="currentColor" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-xs font-bold uppercase text-white/50 tracking-widest">Upgrade</span>
+                  <span className="font-mono text-xs font-bold uppercase text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-2 py-0.5">Pro</span>
+                </div>
+                <h2 className="font-headline font-black text-2xl md:text-3xl text-white uppercase tracking-tight leading-tight mb-2">
+                  Unlock Pro Features
+                </h2>
+                <p className="font-mono text-sm text-white/60 max-w-lg">
+                  Import projects, create Super Projects with persistent VMs, and get priority access to new features.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-start md:items-end gap-3 flex-shrink-0">
+              {upgradeError && (
+                <p className="font-mono text-xs text-red-400 max-w-xs text-right">{upgradeError}</p>
+              )}
+              <button
+                id="upgrade-to-pro-btn"
+                onClick={handleUpgrade}
+                disabled={isUpgrading}
+                className="group flex items-center gap-3 bg-white text-on-surface border-2 border-white/20 px-6 py-3.5 font-mono text-sm font-black uppercase tracking-widest hover:-translate-y-0.5 hover:-translate-x-0.5 transition-all hard-shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {isUpgrading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Redirecting...
+                  </>
+                ) : (
+                  <>
+                    <Star size={16} fill="currentColor" className="text-yellow-500" />
+                    Upgrade to Pro
+                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+              <p className="font-mono text-xs text-white/30">Powered by Dodo Payments · Secure Checkout</p>
+            </div>
+          </div>
+
+          {/* Pro feature pills */}
+          <div className="relative z-10 border-t-2 border-white/10 px-6 md:px-8 py-3 flex flex-wrap gap-x-6 gap-y-2">
+            {['Import Projects', 'Super Projects', 'Persistent VM State', 'Priority Support'].map(feature => (
+              <div key={feature} className="flex items-center gap-1.5 font-mono text-xs text-white/50">
+                <Check size={11} className="text-yellow-400" />
+                {feature}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tactile Panel Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

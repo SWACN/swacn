@@ -19,6 +19,7 @@
     "@xterm/xterm": "^6.0.0",
     "asciinema-player": "^3.15.1",
     "clsx": "^2.1.1",
+    "dodopayments-checkout": "latest",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",

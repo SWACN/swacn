@@ -16,7 +16,10 @@ set(SRC
     src/controllers/ProxyController.cpp
     src/controllers/OembedController.cpp
     src/controllers/LabHtmlController.cpp
+    src/controllers/PaymentController.cpp
 )
 
+find_package(OpenSSL REQUIRED)
+
 add_executable(${PROJECT_NAME} ${SRC})
-target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon)
+target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon OpenSSL::SSL OpenSSL::Crypto)

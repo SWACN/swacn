@@ -35,6 +35,10 @@ CREATE TABLE users (
     -- Enterprise Relation
     enterprise_id INT REFERENCES enterprises(id) ON DELETE SET NULL,
     enterprise_email VARCHAR(255) UNIQUE, -- Tracks the exact email used to claim the seat
+
+    -- Dodo Payments
+    dodo_customer_id VARCHAR(255),
+    dodo_subscription_id VARCHAR(255),
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

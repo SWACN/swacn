@@ -101,3 +101,20 @@ export async function updateCastUpload(id: string, formData: FormData) {
   if (!res.ok) throw new Error(data.error || "Failed to update project files");
   return data;
 }
+
+export async function createCheckoutSession(): Promise<{ checkout_url: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch('/api/v1/payments/checkout', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to create checkout session");
+  return data;
+}
