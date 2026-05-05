@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut } from 'lucide-react';
+import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import * as AsciinemaPlayer from 'asciinema-player';
@@ -58,8 +58,13 @@ export function Lab() {
   const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [copiedEmbedCast, setCopiedEmbedCast] = useState(false);
   const [allowFsDownload, setAllowFsDownload] = useState<boolean>(true);
   const [hasBaseline, setHasBaseline] = useState<boolean>(false);
+  const [casts, setCasts] = useState<{id: number, title: string, recording_url: string}[]>([]);
+  const castIndexParam = parseInt(searchParams.get('castIndex') || '0', 10);
+  const isSingleCastEmbed = isEmbed && searchParams.has('castIndex');
+  const [activeCastIndex, setActiveCastIndex] = useState(isNaN(castIndexParam) ? 0 : castIndexParam);
   const [embedTheme, setEmbedTheme] = useState<'light' | 'dark'>(() => {
     if (!id) return 'dark';
     const cached = localStorage.getItem(`swacn_embed_theme_${id}`);
@@ -93,7 +98,8 @@ export function Lab() {
   const isDefaultSandbox = !id;
   const manifestUrl = id ? `/uploads/${id}/manifest.json` : null;
   const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz` : null;
-  const recordingUrl = id ? `/uploads/${id}/recording.cast` : null;
+  const currentCast = casts[activeCastIndex];
+  const recordingUrl = currentCast ? `/uploads/${currentCast.recording_url}` : (id && hasRecording ? `/uploads/${id}/recording.cast` : null);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
@@ -185,6 +191,7 @@ export function Lab() {
         setAllowFsDownload(cached.allow_fs_download ?? true);
         setHasBaseline(cached.has_baseline ?? false);
         setHasRecording(cached.has_recording);
+        if (cached.casts) setCasts(cached.casts);
         setIsSandboxMode(!cached.has_recording);
         setProjectName(cached.name || '');
       }
@@ -208,6 +215,7 @@ export function Lab() {
         setAllowFsDownload(details.allow_fs_download ?? true);
         setHasBaseline(details.has_baseline ?? false);
         setHasRecording(details.has_recording);
+        if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
       }).catch(err => {
         console.error("Failed to fetch cast details", err);
@@ -271,17 +279,28 @@ export function Lab() {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
     setCopiedEmbed(false);
+    setCopiedEmbedCast(false);
   };
 
-  const copyEmbedCode = (e: React.MouseEvent) => {
+  const copyEmbedCode = (e: React.MouseEvent, specificCast: boolean = false) => {
     e.stopPropagation();
     if (!id) return;
-    const url = `${window.location.origin}/lab/${id}?embed=true`;
+    let url = `${window.location.origin}/lab/${id}?embed=true`;
+    if (specificCast) url += `&castIndex=${activeCastIndex}`;
+    
     // We use width: 100% and aspect-ratio for better responsiveness out of the box
     const embedCode = `<iframe src="${url}" width="100%" height="500" style="border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;" frameborder="0" allowfullscreen></iframe>`;
     navigator.clipboard.writeText(embedCode);
-    setCopiedEmbed(true);
-    setTimeout(() => setContextMenu(null), 1000);
+    if (specificCast) {
+      setCopiedEmbedCast(true);
+    } else {
+      setCopiedEmbed(true);
+    }
+    setTimeout(() => {
+      setContextMenu(null);
+      setCopiedEmbed(false);
+      setCopiedEmbedCast(false);
+    }, 1000);
   };
 
   // --- ASCIINEMA INITIALIZATION (Crash-Proof) ---
@@ -908,7 +927,7 @@ export function Lab() {
               <div className={`w-px h-8 opacity-30 ${embedTheme === 'dark' ? 'bg-[#fcf9f0]' : 'bg-on-surface'}`}></div>
               <span className="font-mono text-sm md:text-base font-bold uppercase tracking-tighter truncate max-w-[200px] sm:max-w-none">
               {id 
-                ? (projectName || projects.find(p => p.id === id)?.name || id.split('-')[0])
+                ? (currentCast?.title || projectName || projects.find(p => p.id === id)?.name || id.split('-')[0])
                 : 'BASE SANDBOX'}
               </span>
             </div>
@@ -932,7 +951,7 @@ export function Lab() {
               
               <div className="min-w-0 flex-grow px-2">
                 <div className={`font-mono text-[10px] sm:text-xs font-bold tracking-widest uppercase truncate max-w-[120px] sm:max-w-[300px] mx-auto text-center ${embedTheme === 'dark' ? 'text-[#fcf9f0]' : 'text-on-surface'}`}>
-                  {projectName || id?.split('-')[0]}
+                  {currentCast?.title || projectName || id?.split('-')[0]}
                 </div>
               </div>
               
@@ -992,18 +1011,56 @@ export function Lab() {
               </div>
             )}
 
+            {/* Slider UI for Multiple Casts */}
+            {casts.length > 1 && !isSandboxMode && !isSingleCastEmbed && (
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-40 pointer-events-none">
+                <button 
+                  onClick={() => setActiveCastIndex(prev => Math.max(0, prev - 1))}
+                  disabled={activeCastIndex === 0}
+                  className={`p-3 border-2 transition-all pointer-events-auto group disabled:opacity-0 disabled:pointer-events-none
+                    ${embedTheme === 'dark' 
+                      ? 'bg-[#1c1c17]/80 backdrop-blur-md border-[#fcf9f0]/20 text-[#fcf9f0] hover:bg-primary hover:text-white hover:border-primary hard-shadow-sm-light' 
+                      : 'bg-white/80 backdrop-blur-md border-on-surface text-on-surface hover:bg-primary hover:text-white hover:border-primary hard-shadow-sm'}`}
+                  title="Previous Cast"
+                >
+                  <ChevronLeft size={24} className="group-hover:-translate-x-0.5 transition-transform" />
+                </button>
+
+                <button 
+                  onClick={() => setActiveCastIndex(prev => Math.min(casts.length - 1, prev + 1))}
+                  disabled={activeCastIndex === casts.length - 1}
+                  className={`p-3 border-2 transition-all pointer-events-auto group disabled:opacity-0 disabled:pointer-events-none
+                    ${embedTheme === 'dark' 
+                      ? 'bg-[#1c1c17]/80 backdrop-blur-md border-[#fcf9f0]/20 text-[#fcf9f0] hover:bg-primary hover:text-white hover:border-primary hard-shadow-sm-light' 
+                      : 'bg-white/80 backdrop-blur-md border-on-surface text-on-surface hover:bg-primary hover:text-white hover:border-primary hard-shadow-sm'}`}
+                  title="Next Cast"
+                >
+                  <ChevronRight size={24} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            )}
+
             {/* Context Menu */}
             {contextMenu && (
               <div 
                 className={`fixed z-[1000] border-4 p-2 font-mono text-sm ${embedTheme === 'dark' ? 'bg-[#1c1c17] border-[#fcf9f0]/40 text-[#fcf9f0] hard-shadow-light' : 'bg-background border-on-surface text-on-surface hard-shadow'}`}
                 style={{ left: contextMenu.x, top: contextMenu.y }}
               >
+                {casts.length > 1 && !isSandboxMode && (
+                  <button 
+                    onClick={(e) => copyEmbedCode(e, true)}
+                    className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbedCast ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
+                  >
+                    {copiedEmbedCast ? <Check size={16} /> : <Share2 size={16} />} 
+                    {copiedEmbedCast ? 'Copied!' : 'Embed Current Chapter'}
+                  </button>
+                )}
                 <button 
-                  onClick={copyEmbedCode}
+                  onClick={(e) => copyEmbedCode(e, false)}
                   className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
                 >
                   {copiedEmbed ? <Check size={16} /> : <Share2 size={16} />} 
-                  {copiedEmbed ? 'Copied!' : 'Copy embed code'}
+                  {copiedEmbed ? 'Copied!' : 'Embed Full Project'}
                 </button>
               </div>
             )}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SquareTerminal, XCircle } from 'lucide-react';
-import { getAuthToken, fetchCasts, fetchCastDetails } from '../lib/api';
+import { getAuthToken, fetchCasts, fetchCastDetails, fetchMe } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 import { TarReader } from '../lib/TarReader';
 
@@ -16,7 +16,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [createEnvVars, setCreateEnvVars] = useState('');
   const [createTools, setCreateTools] = useState('');
   const [createFiles, setCreateFiles] = useState<FileList | null>(null);
-  const [createRecordingFile, setCreateRecordingFile] = useState<File | null>(null);
+  const [recordings, setRecordings] = useState<{ id?: number, file: File | null, title: string, deleted?: boolean, existingUrl?: string, uid: number }[]>([{ file: null, title: '', uid: Date.now() }]);
   const [createWelcomeMessage, setCreateWelcomeMessage] = useState('');
   const [showWelcomeEditor, setShowWelcomeEditor] = useState(false);
   const [createInitScript, setCreateInitScript] = useState('');
@@ -24,18 +24,40 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   const [deleteWelcome, setDeleteWelcome] = useState(false);
   const [deleteInit, setDeleteInit] = useState(false);
   const [deleteBaseline, setDeleteBaseline] = useState(false);
-  const [deleteRecording, setDeleteRecording] = useState(false);
   const [existingBaseline, setExistingBaseline] = useState<string | null>(null);
-  const [existingRecording, setExistingRecording] = useState<string | null>(null);
+  const [isProUser, setIsProUser] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchMe().then(me => {
+        setIsProUser(me.is_pro || me.is_super_admin);
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   React.useEffect(() => {
     if (isOpen && editCastId) {
       fetchCastDetails(editCastId)
         .then(details => {
           setCreateProjectName(prev => prev || details.name || '');
+          if (details.casts && details.casts.length > 0) {
+            const existing = details.casts.map((c: any, i: number) => ({
+              id: c.id,
+              file: null,
+              title: c.title || '',
+              existingUrl: c.recording_url,
+              uid: Date.now() + i
+            }));
+            
+            // Auto-add an empty slot for Pro users if they are editing
+            if (isProUser) {
+              existing.push({ file: null, title: '', uid: Date.now() + details.casts.length });
+            }
+            setRecordings(existing);
+          }
         })
         .catch(err => console.error("Failed to fetch cast details for edit", err));
 
@@ -50,7 +72,6 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                            data.binaries?.x86_64 || data.environment?.binaries?.x86_64 || [];
           setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
           setExistingBaseline(data.baseline || null);
-          setExistingRecording(data.recording || null);
         })
         .catch(err => console.error("Failed to fetch manifest for edit", err));
     } else if (isOpen) {
@@ -58,9 +79,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setCreateEnvVars('');
       setCreateTools('');
       setCreateFiles(null);
-      setCreateRecordingFile(null);
+      setRecordings([{ file: null, title: '', uid: Date.now() }]);
       setExistingBaseline(null);
-      setExistingRecording(null);
       setUploadError(null);
       setCreateWelcomeMessage('');
       setShowWelcomeEditor(false);
@@ -69,11 +89,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setDeleteWelcome(false);
       setDeleteInit(false);
       setDeleteBaseline(false);
-      setDeleteRecording(false);
-      setCreateFiles(null);
       setDeleteInit(false);
       setDeleteBaseline(false);
-      setDeleteRecording(false);
+      setCreateFiles(null);
     }
   }, [isOpen, editCastId]);
 
@@ -95,8 +113,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
       if (!editCastId) {
         const casts = await fetchCasts();
-        if (casts.length >= 15) {
-          throw new Error("Project limit reached. You have 15 active projects.");
+        const maxProjects = isProUser ? 50 : 15;
+        if (casts.length >= maxProjects) {
+          throw new Error(`Project limit reached. You have ${casts.length} active projects.`);
         }
       }
 
@@ -112,7 +131,6 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
       if (editCastId) {
         if (existingBaseline) manifest.baseline = existingBaseline;
-        if (existingRecording) manifest.recording = existingRecording;
       }
 
       if (createEnvVars.trim()) {
@@ -236,20 +254,25 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
         formData.append('delete_baseline', 'true');
       }
 
-      if (deleteRecording) {
-        manifest.recording = null;
-        formData.append('delete_recording', 'true');
-      } else if (createRecordingFile) {
-        totalSize += createRecordingFile.size;
-        formData.append('recording', createRecordingFile, 'recording.cast');
-        manifest.recording = "recording.cast";
+      let recordingIndex = 0;
+      for (const rec of recordings) {
+        if (rec.id && rec.deleted) {
+          formData.append(`delete_cast_${rec.id}`, 'true');
+        } else if (rec.file && !rec.deleted) {
+          totalSize += rec.file.size;
+          formData.append(`recording_${recordingIndex}`, rec.file, `recording_${recordingIndex}.cast`);
+          formData.append(`title_${recordingIndex}`, rec.title.trim());
+          recordingIndex++;
+        } else if (rec.id && !rec.deleted) {
+          formData.append(`update_title_${rec.id}`, rec.title.trim());
+        }
       }
 
       const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
       totalSize += manifestBlob.size;
 
-      if (totalSize > 2 * 1024 * 1024) {
-        throw new Error("Project size exceeds the 2 MB limit.");
+      if (totalSize > (isProUser ? 50 * 1024 * 1024 : 2 * 1024 * 1024)) {
+        throw new Error(`Project size exceeds the allocated capacity for your account tier.`);
       }
 
       formData.append('manifest', manifestBlob, 'manifest.json');
@@ -286,7 +309,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setCreateEnvVars('');
       setCreateTools('');
       setCreateFiles(null);
-      setCreateRecordingFile(null);
+      setRecordings([{ file: null, title: '', uid: Date.now() }]);
       setCreateWelcomeMessage('');
       setShowWelcomeEditor(false);
       setCreateInitScript('');
@@ -375,9 +398,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   <button 
                     type="button"
                     onClick={() => { setDeleteWelcome(!deleteWelcome); if (!deleteWelcome) setCreateWelcomeMessage(''); }}
-                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteWelcome ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${deleteWelcome ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
                   >
-                    {deleteWelcome ? 'WILL DELETE' : 'DELETE'}
+                    {deleteWelcome ? 'UNDO' : 'DEL'}
                   </button>
                 </div>
               ) : (
@@ -403,9 +426,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   <button 
                     type="button"
                     onClick={() => { setDeleteInit(!deleteInit); if (!deleteInit) setCreateInitScript(''); }}
-                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteInit ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${deleteInit ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
                   >
-                    {deleteInit ? 'WILL DELETE' : 'DELETE'}
+                    {deleteInit ? 'UNDO' : 'DEL'}
                   </button>
                 </div>
               ) : (
@@ -420,90 +443,134 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
             <div>
               <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Filesystem Upload</label>
-              <div className="flex gap-2 mb-2">
-                <label className={`flex-1 block bg-surface-container-high border-2 ${editCastId && (!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
-                  <input 
-                    type="file" 
-                    // @ts-ignore
-                    webkitdirectory="true" 
-                    directory=""
-                    onChange={(e) => {
-                      setCreateFiles(e.target.files);
-                      if (e.target.files && e.target.files.length > 0) {
-                        setDeleteBaseline(false);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
-                      {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
-                    </span>
-                    
-                    {createFiles && createFiles.length > 0 && (
-                      <span className="text-xs opacity-70 font-mono text-primary font-bold">
-                        {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
+              <div className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${deleteBaseline ? 'border-red-500/50 bg-red-500/5' : 'border-on-surface bg-surface-container-high'}`}>
+                <div className={`${(createFiles && createFiles.length > 0 || editCastId) ? 'flex-1' : 'w-full flex justify-center'}`}>
+                  <label className={`block ${(createFiles && createFiles.length > 0 || editCastId) ? 'w-full' : 'w-full max-w-xs'} border-2 ${(!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${deleteBaseline ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input 
+                      type="file" 
+                      // @ts-ignore
+                      webkitdirectory="true" 
+                      directory=""
+                      onChange={(e) => {
+                        setCreateFiles(e.target.files);
+                        if (e.target.files && e.target.files.length > 0) {
+                          setDeleteBaseline(false);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <span className="font-mono text-xs font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                        {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
                       </span>
-                    )}
-                  </div>
-                </label>
-                {editCastId && (
+                      
+                      {createFiles && createFiles.length > 0 && (
+                        <span className="text-[10px] opacity-70 font-mono text-primary font-bold">
+                          {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                </div>
+                {(editCastId || (createFiles && createFiles.length > 0)) && (
                   <button 
                     type="button"
                     onClick={() => {
-                      const newState = !deleteBaseline;
-                      setDeleteBaseline(newState);
-                      if (newState) setCreateFiles(null);
+                      if (editCastId && (!createFiles || createFiles.length === 0)) {
+                        const newState = !deleteBaseline;
+                        setDeleteBaseline(newState);
+                        if (newState) setCreateFiles(null);
+                      } else {
+                        // For new projects or if they just picked a new folder to replace the old one
+                        setCreateFiles(null);
+                        setDeleteBaseline(false);
+                      }
                     }}
-                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteBaseline ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                    className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
                   >
-                    {deleteBaseline ? 'WILL DELETE' : 'DELETE'}
+                    {(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'UNDO' : 'DEL'}
                   </button>
                 )}
               </div>
             </div>
 
             <div>
-              <label className="font-mono text-[10px] font-bold uppercase text-primary block mb-2">Terminal Recording (.cast file)</label>
-              <div className="flex gap-2 mb-2">
-                <label className={`flex-1 block w-full bg-surface-container-high border-2 ${editCastId && !createRecordingFile ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-4 cursor-pointer hover:bg-white transition-colors group`}>
-                  <input 
-                    type="file" 
-                    accept=".cast"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setCreateRecordingFile(file);
-                      if (file) {
-                        setDeleteRecording(false);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
-                      {createRecordingFile ? "New Recording Selected" : (editCastId ? "Replace Recording" : "Select Recording")}
-                    </span>
-                    
-                    {createRecordingFile && (
-                      <span className="text-xs opacity-70 font-mono text-primary font-bold">
-                        {createRecordingFile.name}
-                      </span>
+              <div className="flex justify-between items-center mb-2">
+                <label className="font-mono text-[10px] font-bold uppercase text-primary">Terminal Recordings (.cast files)</label>
+              </div>
+              <div className="space-y-4">
+                {recordings.map((rec, idx) => (
+                  <div key={rec.uid} className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${rec.deleted ? 'border-red-500/50 bg-red-500/5' : 'border-on-surface bg-surface-container-high'}`}>
+                    <div className={`${(rec.file || rec.id) ? 'flex-1' : 'w-full flex justify-center'}`}>
+                      <label className={`block ${(rec.file || rec.id) ? 'w-full' : 'w-full max-w-xs'} border-2 ${!rec.file && !rec.id ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <input 
+                          type="file" 
+                          accept=".cast"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            const newRecs = [...recordings];
+                            newRecs[idx].file = file;
+                            newRecs[idx].deleted = false;
+                            
+                            // If this was the last slot and we are Pro, add a new empty slot
+                            if (isProUser && idx === recordings.length - 1 && file) {
+                              newRecs.push({ file: null, title: '', uid: Date.now() });
+                            }
+                            
+                            setRecordings(newRecs);
+                          }}
+                          className="hidden"
+                          disabled={rec.deleted}
+                        />
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <span className="font-mono text-xs font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
+                            {rec.file ? "New File Selected" : (rec.id ? "Existing Cast" : "Select Recording")}
+                          </span>
+                          {rec.file && (
+                            <span className="text-[10px] opacity-70 font-mono text-primary font-bold">
+                              {rec.file.name}
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                    {(rec.file || rec.id) && (
+                      <div className={`${isProUser ? 'flex-[2]' : ''} flex gap-2 items-stretch`}>
+                        {isProUser && (
+                          <input 
+                            type="text" 
+                            value={rec.title}
+                            onChange={(e) => {
+                              const newRecs = [...recordings];
+                              newRecs[idx].title = e.target.value;
+                              setRecordings(newRecs);
+                            }}
+                            disabled={rec.deleted}
+                            className={`w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-base outline-none focus:border-primary transition-colors ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}
+                            placeholder="Optional Cast Title"
+                          />
+                        )}
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (rec.id) {
+                              const newRecs = [...recordings];
+                              newRecs[idx].deleted = !rec.deleted;
+                              setRecordings(newRecs);
+                            } else {
+                              const newRecs = recordings.filter((_, i) => i !== idx);
+                              if (newRecs.length === 0) newRecs.push({ file: null, title: '', uid: Date.now() });
+                              setRecordings(newRecs);
+                            }
+                          }}
+                          className={`px-3 py-3 border-2 font-mono text-xs font-bold transition-colors whitespace-nowrap ${rec.deleted ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
+                        >
+                          {rec.deleted ? 'UNDO' : 'DEL'}
+                        </button>
+                      </div>
                     )}
                   </div>
-                </label>
-                {editCastId && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      const newState = !deleteRecording;
-                      setDeleteRecording(newState);
-                      if (newState) setCreateRecordingFile(null);
-                    }}
-                    className={`px-4 border-2 font-mono text-xs font-bold transition-colors ${deleteRecording ? 'bg-red-500 text-white border-red-500' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-red-50'}`}
-                  >
-                    {deleteRecording ? 'WILL DELETE' : 'DELETE'}
-                  </button>
-                )}
+                ))}
               </div>
             </div>
 

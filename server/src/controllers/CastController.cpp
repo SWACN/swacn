@@ -17,7 +17,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 
     auto dbClient = drogon::app().getDbClient();
     dbClient->execSqlAsync(
-        "SELECT id FROM users WHERE api_key = $1",
+        "SELECT id, (is_pro = true) as is_pro, (is_super_admin = true) as is_super_admin FROM users WHERE api_key = $1",
         [req, callback, dbClient](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -26,14 +26,19 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                 return;
             }
             int user_id = r[0]["id"].as<int>();
+            bool is_pro = r[0]["is_pro"].isNull() ? false : r[0]["is_pro"].as<bool>();
+            bool is_super_admin = r[0]["is_super_admin"].isNull() ? false : r[0]["is_super_admin"].as<bool>();
+            bool has_extended_limits = is_pro || is_super_admin;
+            int max_projects = has_extended_limits ? 50 : 15;
+            size_t max_size = has_extended_limits ? 50 * 1024 * 1024 : 2 * 1024 * 1024;
 
             dbClient->execSqlAsync(
                 "SELECT COUNT(*) FROM projects WHERE user_id = $1 AND deleted_at IS NULL",
-                [req, callback, dbClient, user_id](const drogon::orm::Result& r_count) {
+                [req, callback, dbClient, user_id, max_projects, max_size, has_extended_limits](const drogon::orm::Result& r_count) {
                     int count = r_count[0][0].as<int>();
-                    if (count >= 15) {
+                    if (count >= max_projects) {
                         Json::Value err;
-                        err["error"] = "Project limit reached. You have 15 active projects. Please consider deleting projects not actively used by you before uploading new ones.";
+                        err["error"] = "Project limit reached. Please consider deleting projects not actively used by you before uploading new ones.";
                         auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
                         resp->setStatusCode(drogon::k403Forbidden);
                         callback(resp);
@@ -54,9 +59,9 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                     for (auto const& file : fileUpload.getFiles()) {
                         total_size += file.fileLength();
                     }
-                    if (total_size > 2 * 1024 * 1024) {
+                    if (total_size > max_size) {
                         Json::Value err;
-                        err["error"] = "Project size exceeds the 2 MB limit. Please ensure your filesystem snapshot is small.";
+                        err["error"] = "Project size exceeds the allocated capacity for your account tier. Please ensure your filesystem snapshot is small.";
                         auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
                         resp->setStatusCode(drogon::k413RequestEntityTooLarge);
                         callback(resp);
@@ -81,14 +86,17 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 
                     // 4. Save files directly
                     bool has_baseline = false;
-                    bool has_recording = false;
+                    std::vector<std::string> recording_files;
                     for (auto& file : fileUpload.getFiles()) {
                         std::string itemName = file.getItemName(); 
                         std::string targetName;
 
                         if (itemName == "manifest") targetName = "manifest.json";
                         else if (itemName == "baseline") { targetName = "baseline.tar.gz"; has_baseline = true; }
-                        else if (itemName == "recording") { targetName = "recording.cast"; has_recording = true; }
+                        else if (itemName.find("recording") == 0) { 
+                            targetName = itemName + ".cast"; 
+                            recording_files.push_back(itemName); 
+                        }
                         else targetName = file.getFileName(); 
 
                         std::string absolute_save_path = (cast_dir / targetName).string();
@@ -96,27 +104,21 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                     }
 
                     bool delete_baseline = false;
-                    bool delete_recording = false;
                     for (auto const& field : fileUpload.getParameters()) {
                         if (field.first == "delete_baseline" && field.second == "true") delete_baseline = true;
-                        if (field.first == "delete_recording" && field.second == "true") delete_recording = true;
+                        // For multiple casts, deletion is likely handled differently or via re-upload.
                     }
 
                     if (delete_baseline) {
                         try { fs::remove(cast_dir / "baseline.tar.gz"); } catch (...) {}
                         has_baseline = false;
                     }
-                    if (delete_recording) {
-                        try { fs::remove(cast_dir / "recording.cast"); } catch (...) {}
-                        has_recording = false;
-                    }
 
                     std::string baseline_val = has_baseline ? (cast_uuid + "/baseline.tar.gz") : "";
-                    std::string recording_val = has_recording ? (cast_uuid + "/recording.cast") : "";
 
                     bool has_keystrokes = false;
-                    if (has_recording) {
-                        std::ifstream rec_file((cast_dir / "recording.cast").string());
+                    for (const auto& rec : recording_files) {
+                        std::ifstream rec_file((cast_dir / (rec + ".cast")).string());
                         std::string line;
                         while (std::getline(rec_file, line)) {
                             if (line.find("\"i\"") != std::string::npos) {
@@ -124,54 +126,78 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                                 break;
                             }
                         }
+                        if (has_keystrokes) break;
                     }
 
                     // 4.5 Extract project name from manifest if possible
-                    std::string title = "";
+                    std::string project_title = "";
                     try {
                         std::ifstream manifest_file((cast_dir / "manifest.json").string());
                         Json::Value manifest_json;
                         manifest_file >> manifest_json;
                         if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
-                            title = manifest_json["environment"]["project"].asString();
+                            project_title = manifest_json["environment"]["project"].asString();
                         }
-                    } catch (...) {
-                        // Ignore parsing errors
+                    } catch (...) {}
+
+                    // Extract titles from form data
+                    std::map<std::string, std::string> cast_titles;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first.find("title_") == 0) {
+                            std::string rec_name = "recording_" + field.first.substr(6);
+                            cast_titles[rec_name] = field.second.empty() ? project_title : field.second;
+                        }
                     }
 
                     // 5. Insert Project and Cast utilizing NULLIF
                     dbClient->execSqlAsync(
                         "INSERT INTO projects (user_id, name, manifest_url, baseline_url, show_keystrokes, allow_fs_download, embed_theme) VALUES ($1, COALESCE(NULLIF($2, ''), 'Untitled Project'), $3, NULLIF($4, ''), $5, $6, $7) RETURNING id",
-                        [callback, cast_uuid, user_id, title, recording_val, dbClient](const drogon::orm::Result& res) {
+                        [callback, cast_uuid, user_id, project_title, recording_files, cast_titles, dbClient](const drogon::orm::Result& res) {
                             int project_id = res[0]["id"].as<int>();
                             
-                            dbClient->execSqlAsync(
-                                "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))",
-                                [callback, cast_uuid](const drogon::orm::Result& res2) {
-                                    const char* env_url = getenv("APP_URL");
-                                    std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
-                                    
-                                    if (!base_url.empty() && base_url.back() == '/') {
-                                        base_url.pop_back();
-                                    }
+                            // Insert all recordings
+                            if (recording_files.empty()) {
+                                const char* env_url = getenv("APP_URL");
+                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
-                                    Json::Value ret;
-                                    ret["status"] = "success";
-                                    ret["cast_id"] = cast_uuid;
-                                    ret["url"] = base_url + "/view/" + cast_uuid; 
-                                    
-                                    callback(drogon::HttpResponse::newHttpJsonResponse(ret));
-                                },
-                                [callback](const drogon::orm::DrogonDbException& e) {
-                                    auto resp = drogon::HttpResponse::newHttpResponse();
-                                    resp->setStatusCode(drogon::k500InternalServerError);
-                                    callback(resp);
-                                },
-                                user_id,
-                                project_id,
-                                title,
-                                recording_val
-                            );
+                                Json::Value ret;
+                                ret["status"] = "success";
+                                ret["cast_id"] = cast_uuid;
+                                ret["url"] = base_url + "/view/" + cast_uuid; 
+                                callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                                return;
+                            }
+
+                            auto counter = std::make_shared<int>(recording_files.size());
+                            for (const auto& rec : recording_files) {
+                                std::string rec_url = cast_uuid + "/" + rec + ".cast";
+                                std::string title = cast_titles.count(rec) ? cast_titles.at(rec) : project_title;
+                                
+                                dbClient->execSqlAsync(
+                                    "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))",
+                                    [callback, cast_uuid, counter](const drogon::orm::Result& res2) {
+                                        (*counter)--;
+                                        if (*counter == 0) {
+                                            const char* env_url = getenv("APP_URL");
+                                            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                            if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
+
+                                            Json::Value ret;
+                                            ret["status"] = "success";
+                                            ret["cast_id"] = cast_uuid;
+                                            ret["url"] = base_url + "/view/" + cast_uuid; 
+                                            callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                                        }
+                                    },
+                                    [callback](const drogon::orm::DrogonDbException& e) {
+                                        auto resp = drogon::HttpResponse::newHttpResponse();
+                                        resp->setStatusCode(drogon::k500InternalServerError);
+                                        callback(resp);
+                                    },
+                                    user_id, project_id, title, rec_url
+                                );
+                            }
                         },
                         [callback](const drogon::orm::DrogonDbException& e) {
                             auto resp = drogon::HttpResponse::newHttpResponse();
@@ -179,7 +205,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                             callback(resp);
                         },
                         user_id, 
-                        title,
+                        project_title,
                         cast_uuid + "/manifest.json", 
                         baseline_val, 
                         has_keystrokes,
@@ -209,10 +235,9 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     std::string like_pattern = id + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, "
-        "(SELECT recording_url FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 1) as recording_url "
+        "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at "
         "FROM projects p WHERE p.manifest_url LIKE $1 AND p.deleted_at IS NULL",
-        [callback, id](const drogon::orm::Result& r) {
+        [callback, dbClient, id](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k404NotFound);
@@ -221,17 +246,38 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
             }
             
             auto const& row = r[0];
+            int project_id = row["id"].as<int>();
             Json::Value castObj;
             castObj["id"] = id;
             castObj["name"] = row["name"].isNull() ? "" : row["name"].as<std::string>();
-            castObj["has_recording"] = !row["recording_url"].isNull();
             castObj["has_baseline"] = !row["baseline_url"].isNull();
             castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
             castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
             castObj["allow_fs_download"] = row["allow_fs_download"].isNull() ? true : row["allow_fs_download"].as<bool>();
             castObj["embed_theme"] = row["embed_theme"].isNull() ? "dark" : row["embed_theme"].as<std::string>();
             
-            callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
+            dbClient->execSqlAsync(
+                "SELECT id, title, recording_url FROM casts WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC",
+                [callback, castObj](const drogon::orm::Result& c_res) mutable {
+                    Json::Value castsArr(Json::arrayValue);
+                    for (auto const& c_row : c_res) {
+                        Json::Value cObj;
+                        cObj["id"] = c_row["id"].as<int>();
+                        cObj["title"] = c_row["title"].isNull() ? "" : c_row["title"].as<std::string>();
+                        cObj["recording_url"] = c_row["recording_url"].as<std::string>();
+                        castsArr.append(cObj);
+                    }
+                    castObj["casts"] = castsArr;
+                    castObj["has_recording"] = castsArr.size() > 0;
+                    callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
+                },
+                [callback](const drogon::orm::DrogonDbException& e) {
+                    auto resp = drogon::HttpResponse::newHttpResponse();
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                },
+                project_id
+            );
         },
         [callback](const drogon::orm::DrogonDbException& e) {
             auto resp = drogon::HttpResponse::newHttpResponse();
@@ -419,7 +465,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
     
     // First verify ownership
     dbClient->execSqlAsync(
-        "SELECT projects.id, projects.user_id FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url LIKE $2 AND projects.deleted_at IS NULL",
+        "SELECT projects.id, projects.user_id, (users.is_pro = true) as is_pro, (users.is_super_admin = true) as is_super_admin FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url LIKE $2 AND projects.deleted_at IS NULL",
         [req, callback, dbClient, id, like_pattern](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -429,170 +475,228 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
             }
             int project_id = r[0]["id"].as<int>();
             int user_id = r[0]["user_id"].as<int>();
+            bool is_pro = r[0]["is_pro"].isNull() ? false : r[0]["is_pro"].as<bool>();
+            bool is_super_admin = r[0]["is_super_admin"].isNull() ? false : r[0]["is_super_admin"].as<bool>();
+            bool has_extended_limits = is_pro || is_super_admin;
 
-            // Parse Multipart
-            drogon::MultiPartParser fileUpload;
-            if (fileUpload.parse(req) != 0 || fileUpload.getFiles().empty()) {
-                auto resp = drogon::HttpResponse::newHttpResponse();
-                resp->setStatusCode(drogon::k400BadRequest);
-                resp->setBody("Incomplete upload assets. Requires at least a manifest.");
-                callback(resp);
-                return;
-            }
-
-            size_t total_size = 0;
-            for (auto const& file : fileUpload.getFiles()) {
-                total_size += file.fileLength();
-            }
-            if (total_size > 2 * 1024 * 1024) {
-                Json::Value err;
-                err["error"] = "Project size exceeds the 2 MB limit.";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-                resp->setStatusCode(drogon::k413RequestEntityTooLarge);
-                callback(resp);
-                return;
-            }
-
-            // Setup Directory - Clear out old contents if needed
-            std::string upload_path_from_config = drogon::app().getUploadPath();
-            fs::path root_upload_path(upload_path_from_config);
-            fs::path cast_dir = root_upload_path / id;
-
-            try {
-                if (!fs::exists(cast_dir)) {
-                    fs::create_directories(cast_dir);
-                }
-            } catch (const std::exception& e) {
-                LOG_ERROR << "FS Error: " << e.what();
-                auto resp = drogon::HttpResponse::newHttpResponse();
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            bool has_baseline = false;
-            bool has_recording = false;
-            for (auto& file : fileUpload.getFiles()) {
-                std::string itemName = file.getItemName(); 
-                std::string targetName;
-
-                if (itemName == "manifest") targetName = "manifest.json";
-                else if (itemName == "baseline") { targetName = "baseline.tar.gz"; has_baseline = true; }
-                else if (itemName == "recording") { targetName = "recording.cast"; has_recording = true; }
-                else targetName = file.getFileName(); 
-
-                std::string absolute_save_path = (cast_dir / targetName).string();
-                try {
-                    if (fs::exists(absolute_save_path)) {
-                        fs::remove(absolute_save_path);
-                    }
-                } catch (...) {}
-                file.saveAs(absolute_save_path);
-            }
-
-            bool delete_baseline = false;
-            bool delete_recording = false;
-            for (auto const& field : fileUpload.getParameters()) {
-                if (field.first == "delete_baseline" && field.second == "true") delete_baseline = true;
-                if (field.first == "delete_recording" && field.second == "true") delete_recording = true;
-            }
-
-            if (delete_baseline) {
-                try { fs::remove(cast_dir / "baseline.tar.gz"); } catch (...) {}
-                has_baseline = false;
-            }
-            if (delete_recording) {
-                try { fs::remove(cast_dir / "recording.cast"); } catch (...) {}
-                has_recording = false;
-            }
-
-            LOG_INFO << "Updating Cast: " << id << " delete_baseline: " << delete_baseline << " delete_recording: " << delete_recording;
-
-            std::string baseline_val = has_baseline ? (id + "/baseline.tar.gz") : (delete_baseline ? "__DELETE__" : "");
-            std::string recording_val = has_recording ? (id + "/recording.cast") : (delete_recording ? "__DELETE__" : "");
-
-            LOG_INFO << "Baseline Val: " << baseline_val << " Recording Val: " << recording_val;
-
-            bool has_keystrokes = false;
-            if (has_recording) {
-                std::ifstream rec_file((cast_dir / "recording.cast").string());
-                std::string line;
-                while (std::getline(rec_file, line)) {
-                    if (line.find("\"i\"") != std::string::npos) {
-                        has_keystrokes = true;
-                        break;
-                    }
-                }
-            }
-
-            std::string title = "";
-            try {
-                std::ifstream manifest_file((cast_dir / "manifest.json").string());
-                Json::Value manifest_json;
-                manifest_file >> manifest_json;
-                if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
-                    title = manifest_json["environment"]["project"].asString();
-                }
-            } catch (const std::exception& e) { 
-                LOG_WARN << "Manifest parse failed: " << e.what();
-            }
-
-            // Update Database
+            // Check if user has exceeded limits (Grandfathering logic)
             dbClient->execSqlAsync(
-                "UPDATE projects SET "
-                "name = COALESCE(NULLIF($1, ''), name), "
-                "baseline_url = CASE WHEN $2 = '__DELETE__' THEN NULL WHEN $2 <> '' THEN $2 ELSE baseline_url END, "
-                "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END "
-                "WHERE id = $4",
-                [callback, dbClient, id, project_id, user_id, title, recording_val](const drogon::orm::Result& res) {
-                    
-                    auto returnSuccess = [callback, id]() {
-                        const char* env_url = getenv("APP_URL");
-                        std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
-                        if (!base_url.empty() && base_url.back() == '/') {
-                            base_url.pop_back();
-                        }
-                        Json::Value ret;
-                        ret["status"] = "success";
-                        ret["cast_id"] = id;
-                        ret["url"] = base_url + "/view/" + id; 
-                        callback(drogon::HttpResponse::newHttpJsonResponse(ret));
-                    };
+                "SELECT "
+                "(SELECT COUNT(*) FROM projects WHERE user_id = $1 AND deleted_at IS NULL) as project_count, "
+                "(SELECT COUNT(*) FROM casts WHERE project_id = $2 AND deleted_at IS NULL) as cast_count",
+                [req, callback, dbClient, id, project_id, user_id, has_extended_limits](const drogon::orm::Result& r_counts) {
+                    long long project_count = r_counts[0]["project_count"].as<long long>();
+                    long long cast_count = r_counts[0]["cast_count"].as<long long>();
 
-                    if (recording_val == "__DELETE__") {
-                        dbClient->execSqlAsync(
-                            "UPDATE casts SET deleted_at = CURRENT_TIMESTAMP WHERE project_id = $1 AND deleted_at IS NULL",
-                            [returnSuccess](const drogon::orm::Result& r) { returnSuccess(); },
-                            [callback](const drogon::orm::DrogonDbException& e) { callback(drogon::HttpResponse::newHttpResponse()); },
-                            project_id
-                        );
-                    } else if (!recording_val.empty()) {
-                        dbClient->execSqlAsync(
-                            "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), $4)",
-                            [returnSuccess](const drogon::orm::Result& res2) {
-                                returnSuccess();
-                            },
-                            [callback](const drogon::orm::DrogonDbException& e) {
-                                auto resp = drogon::HttpResponse::newHttpResponse();
-                                resp->setStatusCode(drogon::k500InternalServerError);
-                                callback(resp);
-                            },
-                            user_id, project_id, title, recording_val
-                        );
-                    } else {
-                        returnSuccess();
+                    if (!has_extended_limits) {
+                        if (project_count > 15) {
+                            Json::Value err;
+                            err["error"] = "Project limit exceeded. You can view your projects, but editing is disabled as you have more than 15 projects. Please delete some or upgrade to Pro.";
+                            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+                            resp->setStatusCode(drogon::k403Forbidden);
+                            callback(resp);
+                            return;
+                        }
+                        if (cast_count > 1) {
+                            Json::Value err;
+                            err["error"] = "This is a 'Super Project' with multiple recordings. Editing Super Projects is restricted to Pro users.";
+                            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+                            resp->setStatusCode(drogon::k403Forbidden);
+                            callback(resp);
+                            return;
+                        }
                     }
+
+                    size_t max_size = has_extended_limits ? 50 * 1024 * 1024 : 2 * 1024 * 1024;
+
+                    // Parse Multipart
+                    drogon::MultiPartParser fileUpload;
+                    if (fileUpload.parse(req) != 0 || fileUpload.getFiles().empty()) {
+                        auto resp = drogon::HttpResponse::newHttpResponse();
+                        resp->setStatusCode(drogon::k400BadRequest);
+                        resp->setBody("Incomplete upload assets. Requires at least a manifest.");
+                        callback(resp);
+                        return;
+                    }
+
+                    size_t total_size = 0;
+                    for (auto const& file : fileUpload.getFiles()) {
+                        total_size += file.fileLength();
+                    }
+                    if (total_size > max_size) {
+                        Json::Value err;
+                        err["error"] = "Project size exceeds the allocated capacity for your account tier.";
+                        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+                        resp->setStatusCode(drogon::k413RequestEntityTooLarge);
+                        callback(resp);
+                        return;
+                    }
+
+                    // Setup Directory - Clear out old contents if needed
+                    std::string upload_path_from_config = drogon::app().getUploadPath();
+                    fs::path root_upload_path(upload_path_from_config);
+                    fs::path cast_dir = root_upload_path / id;
+
+                    std::vector<int> casts_to_delete;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first.find("delete_cast_") == 0) {
+                            try { casts_to_delete.push_back(std::stoi(field.first.substr(12))); } catch (...) {}
+                        }
+                    }
+
+                    std::vector<std::string> recording_files;
+                    for (auto const& file : fileUpload.getFiles()) {
+                        std::string targetName = "";
+                        if (file.getItemName().find("recording_") == 0) {
+                            targetName = file.getItemName().substr(10);
+                            recording_files.push_back(targetName);
+                            targetName += ".cast";
+                        }
+                        else targetName = file.getFileName(); 
+
+                        std::string absolute_save_path = (cast_dir / targetName).string();
+                        file.saveAs(absolute_save_path);
+                    }
+
+                    bool delete_baseline = false;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first == "delete_baseline" && field.second == "true") delete_baseline = true;
+                    }
+
+                    if (delete_baseline) {
+                        try { fs::remove(cast_dir / "baseline.tar.gz"); } catch (...) {}
+                    }
+
+                    std::string baseline_val = ""; // Baseline might be kept or updated
+                    // Logic to check if baseline exists or was just uploaded
+                    if (fs::exists(cast_dir / "baseline.tar.gz")) {
+                        baseline_val = id + "/baseline.tar.gz";
+                    }
+
+                    bool has_keystrokes = false;
+                    for (const auto& rec : recording_files) {
+                        std::ifstream rec_file((cast_dir / (rec + ".cast")).string());
+                        std::string line;
+                        while (std::getline(rec_file, line)) {
+                            if (line.find("\"i\"") != std::string::npos) {
+                                has_keystrokes = true;
+                                break;
+                            }
+                        }
+                        if (has_keystrokes) break;
+                    }
+
+                    std::string project_title = "";
+                    try {
+                        std::ifstream manifest_file((cast_dir / "manifest.json").string());
+                        Json::Value manifest_json;
+                        manifest_file >> manifest_json;
+                        if (manifest_json.isMember("environment") && manifest_json["environment"].isMember("project")) {
+                            project_title = manifest_json["environment"]["project"].asString();
+                        }
+                    } catch (const std::exception& e) { }
+
+                    std::map<std::string, std::string> cast_titles;
+                    std::map<int, std::string> cast_titles_to_update;
+                    for (auto const& field : fileUpload.getParameters()) {
+                        if (field.first.find("title_") == 0) {
+                            std::string rec_name = "recording_" + field.first.substr(6);
+                            cast_titles[rec_name] = field.second.empty() ? project_title : field.second;
+                        } else if (field.first.find("update_title_") == 0) {
+                            try {
+                                int cast_id = std::stoi(field.first.substr(13));
+                                cast_titles_to_update[cast_id] = field.second;
+                            } catch (...) {}
+                        }
+                    }
+
+                    // Execute Update Titles Query
+                    for (const auto& pair : cast_titles_to_update) {
+                        dbClient->execSqlAsync(
+                            "UPDATE casts SET title = NULLIF($1, '') WHERE id = $2 AND project_id = $3",
+                            [](const drogon::orm::Result& r) {},
+                            [](const drogon::orm::DrogonDbException& e) {},
+                            pair.second, pair.first, project_id
+                        );
+                    }
+
+                    // Execute Delete Casts Query
+                    if (!casts_to_delete.empty()) {
+                        for (int cast_del_id : casts_to_delete) {
+                            dbClient->execSqlAsync(
+                                "UPDATE casts SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND project_id = $2",
+                                [](const drogon::orm::Result& r) {},
+                                [](const drogon::orm::DrogonDbException& e) {},
+                                cast_del_id, project_id
+                            );
+                        }
+                    }
+
+                    // Update Database Project
+                    dbClient->execSqlAsync(
+                        "UPDATE projects SET "
+                        "name = COALESCE(NULLIF($1, ''), name), "
+                        "baseline_url = CASE WHEN $2 = '__DELETE__' THEN NULL WHEN $2 <> '' THEN $2 ELSE baseline_url END, "
+                        "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END "
+                        "WHERE id = $4",
+                        [callback, dbClient, id, project_id, user_id, project_title, recording_files, cast_titles](const drogon::orm::Result& res) {
+                            
+                            auto returnSuccess = [callback, id]() {
+                                const char* env_url = getenv("APP_URL");
+                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                if (!base_url.empty() && base_url.back() == '/') {
+                                    base_url.pop_back();
+                                }
+                                Json::Value ret;
+                                ret["status"] = "success";
+                                ret["cast_id"] = id;
+                                ret["url"] = base_url + "/view/" + id; 
+                                callback(drogon::HttpResponse::newHttpJsonResponse(ret));
+                            };
+
+                            if (recording_files.empty()) {
+                                returnSuccess();
+                                return;
+                            }
+
+                            auto counter = std::make_shared<int>(recording_files.size());
+                            for (const auto& rec : recording_files) {
+                                std::string rec_url = id + "/" + rec + ".cast";
+                                std::string title = cast_titles.count(rec) ? cast_titles.at(rec) : project_title;
+                                
+                                dbClient->execSqlAsync(
+                                    "INSERT INTO casts (user_id, project_id, title, recording_url) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))",
+                                    [returnSuccess, counter](const drogon::orm::Result& res2) {
+                                        (*counter)--;
+                                        if (*counter == 0) returnSuccess();
+                                    },
+                                    [callback](const drogon::orm::DrogonDbException& e) {
+                                        auto resp = drogon::HttpResponse::newHttpResponse();
+                                        resp->setStatusCode(drogon::k500InternalServerError);
+                                        callback(resp);
+                                    },
+                                    user_id, project_id, title, rec_url
+                                );
+                            }
+                        },
+                        [callback](const drogon::orm::DrogonDbException& e) {
+                            auto resp = drogon::HttpResponse::newHttpResponse();
+                            resp->setStatusCode(drogon::k500InternalServerError);
+                            callback(resp);
+                        },
+                        project_title,
+                        baseline_val,
+                        has_keystrokes,
+                        project_id,
+                        !recording_files.empty()
+                    );
                 },
                 [callback](const drogon::orm::DrogonDbException& e) {
                     auto resp = drogon::HttpResponse::newHttpResponse();
                     resp->setStatusCode(drogon::k500InternalServerError);
                     callback(resp);
                 },
-                title,
-                baseline_val,
-                has_keystrokes,
-                project_id,
-                has_recording
+                user_id, project_id
             );
         },
         [callback](const drogon::orm::DrogonDbException& e) {

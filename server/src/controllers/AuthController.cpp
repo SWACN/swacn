@@ -44,7 +44,7 @@ void AuthController::getMe(const drogon::HttpRequestPtr& req, std::function<void
     auto dbClient = drogon::app().getDbClient();
     
     dbClient->execSqlAsync(
-        "SELECT username, email FROM users WHERE api_key = $1",
+        "SELECT username, email, (is_pro = true) as is_pro, (is_super_admin = true) as is_super_admin FROM users WHERE api_key = $1",
         [callback](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -56,6 +56,8 @@ void AuthController::getMe(const drogon::HttpRequestPtr& req, std::function<void
             Json::Value ret;
             ret["username"] = r[0]["username"].as<std::string>();
             ret["email"] = r[0]["email"].isNull() ? "" : r[0]["email"].as<std::string>();
+            ret["is_pro"] = r[0]["is_pro"].isNull() ? false : r[0]["is_pro"].as<bool>();
+            ret["is_super_admin"] = r[0]["is_super_admin"].isNull() ? false : r[0]["is_super_admin"].as<bool>();
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(ret);
             callback(resp);

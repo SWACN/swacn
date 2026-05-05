@@ -14,6 +14,19 @@ export const logout = () => {
   localStorage.removeItem('swacn_token');
 };
 
+export async function fetchMe() {
+  const token = getAuthToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch('/api/v1/users/me', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  if (!res.ok) throw new Error("Failed to fetch user profile");
+  return res.json();
+}
+
+
 export async function fetchCasts() {
   const token = getAuthToken();
   if (!token) throw new Error("Not authenticated");

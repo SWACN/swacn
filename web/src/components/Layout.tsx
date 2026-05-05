@@ -120,6 +120,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <button 
                 onClick={() => {
                   if (token) {
+                    setEditCastId(null);
                     setIsCreateModalOpen(true);
                   } else {
                     setIsLoginModalOpen(true);
