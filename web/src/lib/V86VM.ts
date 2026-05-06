@@ -425,13 +425,18 @@ export class V86VM {
       ]);
 
       let manifestPromise: Promise<any> | null = null;
-      let baselinePromise: Promise<Uint8Array> | null = null;
+      let baselinePromise: Promise<Uint8Array | null> | null = null;
       if (manifestUrl) {
         manifestPromise = fetchAssetWithCache(manifestUrl, false).then(data => {
           const m = JSON.parse(new TextDecoder().decode(data));
           if (onManifest) onManifest(m); return m;
         });
-        if (baselineUrl) baselinePromise = fetchAssetWithCache(baselineUrl, false);
+        if (baselineUrl) {
+          baselinePromise = fetchAssetWithCache(baselineUrl, false).catch(err => {
+            console.warn('[V86VM] baseline.tar.gz not found or failed to load. Proceeding with fresh boot.', err);
+            return null; 
+          });
+        }
       }
 
       emit('booting_kernel');

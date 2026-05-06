@@ -35,10 +35,6 @@ self.onmessage = async (e: MessageEvent) => {
     console.log('[v86-worker] Initializing V86...');
     const { bios, vgabios, bzimage, wasmModule, projectId, tabId } = payload;
     try {
-      const sw = new SharedWorker(
-        new URL('./relay-worker.ts', import.meta.url),
-        { type: 'module', name: `swacn-relay-${projectId}-${tabId}` }
-      );
       const { V86 } = await import('v86');
 
       emulator = new V86({
