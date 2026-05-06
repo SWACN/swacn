@@ -61,6 +61,10 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             
             oembed["width"] = 800;
             oembed["height"] = 600;
+
+            oembed["thumbnail_url"] = base_url + "/assets/share.png";
+            oembed["thumbnail_width"] = 2000;
+            oembed["thumbnail_height"] = 2000;
             
             std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"600\" title=\"" + title + "\" style=\"border: none; display: block;\" frameborder=\"0\" allowfullscreen></iframe>";
             oembed["html"] = html;
