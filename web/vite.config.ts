@@ -91,6 +91,9 @@ export default defineConfig(({mode}) => {
     build: {
       target: 'esnext'
     },
+    worker: {
+      format: 'es'
+    },
     optimizeDeps: {
       esbuildOptions: {
         target: 'esnext'
