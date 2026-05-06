@@ -50,9 +50,10 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
 
             Json::Value oembed;
             oembed["version"] = "1.0";
-            oembed["type"] = "rich";
+            oembed["type"] = "video";
             oembed["title"] = title;
             oembed["provider_name"] = "SWACN";
+            oembed["author_name"] = "SWACN User";
             
             const char* env_url = getenv("APP_URL");
             std::string base_url = env_url ? std::string(env_url) : "https://swacn.com";
@@ -60,13 +61,13 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["provider_url"] = base_url;
             
             oembed["width"] = 800;
-            oembed["height"] = 600;
+            oembed["height"] = 500;
 
             oembed["thumbnail_url"] = base_url + "/assets/share.png";
             oembed["thumbnail_width"] = 2000;
             oembed["thumbnail_height"] = 2000;
             
-            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"600\" title=\"" + title + "\" style=\"border: none; display: block;\" frameborder=\"0\" allowfullscreen></iframe>";
+            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"100%\" height=\"500\" title=\"" + title + "\" style=\"border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;\" frameborder=\"0\" allowfullscreen></iframe>";
             oembed["html"] = html;
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);

@@ -45,8 +45,9 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"description\" content=\"Interactive terminal lab environment on SWACN.\">\n";
             
             tags << "\n    <!-- Open Graph / Facebook -->\n";
-            tags << "    <meta property=\"og:type\" content=\"website\">\n";
+            tags << "    <meta property=\"og:type\" content=\"video.other\">\n";
             tags << "    <meta property=\"og:url\" content=\"" << full_url << "\">\n";
+            tags << "    <meta property=\"og:site_name\" content=\"SWACN\">\n";
             tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << "\">\n";
             tags << "    <meta property=\"og:description\" content=\"Interactive terminal lab environment.\">\n";
             tags << "    <meta property=\"og:image\" content=\"" << share_img << "\">\n";
@@ -59,14 +60,14 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"twitter:image\" content=\"" << share_img << "\">\n";
             tags << "    <meta name=\"twitter:player\" content=\"" << full_url << "?embed=true\">\n";
             tags << "    <meta name=\"twitter:player:width\" content=\"800\">\n";
-            tags << "    <meta name=\"twitter:player:height\" content=\"600\">\n";
+            tags << "    <meta name=\"twitter:player:height\" content=\"500\">\n";
 
             tags << "\n    <!-- Video / Player Support -->\n";
             tags << "    <meta property=\"og:video\" content=\"" << full_url << "?embed=true\">\n";
             tags << "    <meta property=\"og:video:secure_url\" content=\"" << full_url << "?embed=true\">\n";
             tags << "    <meta property=\"og:video:type\" content=\"text/html\">\n";
             tags << "    <meta property=\"og:video:width\" content=\"800\">\n";
-            tags << "    <meta property=\"og:video:height\" content=\"600\">\n";
+            tags << "    <meta property=\"og:video:height\" content=\"500\">\n";
 
             tags << "\n    <!-- oEmbed Discovery -->\n";
             tags << "    <link rel=\"alternate\" type=\"application/json+oembed\" href=\"" << oembed_url << "\" title=\"" << project_name << "\" />\n";
