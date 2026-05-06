@@ -67,7 +67,7 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["thumbnail_width"] = 2000;
             oembed["thumbnail_height"] = 2000;
             
-            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"100%\" height=\"500\" title=\"" + title + "\" style=\"border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;\" frameborder=\"0\" allowfullscreen></iframe>";
+            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"500\" title=\"" + title + "\" style=\"border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;\" frameborder=\"0\" allowfullscreen></iframe>";
             oembed["html"] = html;
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);
