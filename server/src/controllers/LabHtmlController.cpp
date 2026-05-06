@@ -80,6 +80,8 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             auto resp = drogon::HttpResponse::newHttpResponse();
             resp->setBody(html);
             resp->setContentTypeCode(drogon::CT_TEXT_HTML);
+            // Add oEmbed discovery via HTTP Header
+            resp->addHeader("Link", "<" + oembed_url + ">; rel=\"alternate\"; type=\"application/json+oembed\"");
             callback(resp);
         },
         [callback](const drogon::orm::DrogonDbException& e) {
