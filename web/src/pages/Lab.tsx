@@ -66,7 +66,7 @@ export function Lab() {
   const [hasBaseline, setHasBaseline] = useState<boolean>(false);
   const [casts, setCasts] = useState<{id: number, title: string, recording_url: string}[]>([]);
   const castIndexParam = parseInt(searchParams.get('castIndex') || '0', 10);
-  const isSingleCastEmbed = isEmbed && searchParams.has('castIndex');
+  const isSingleCastEmbed = searchParams.has('castIndex');
   const [activeCastIndex, setActiveCastIndex] = useState(isNaN(castIndexParam) ? 0 : castIndexParam);
   const [embedTheme, setEmbedTheme] = useState<'light' | 'dark'>(() => {
     if (!id) return 'dark';

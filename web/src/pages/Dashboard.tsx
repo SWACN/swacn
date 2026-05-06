@@ -97,7 +97,7 @@ export function Dashboard() {
       return;
     }
 
-    const url = `${window.location.origin}/lab/${cast.id}`;
+    const url = `${window.location.origin}/lab/${cast.id}?embed=true`;
     navigator.clipboard.writeText(url);
     setCopiedId(cast.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -431,7 +431,7 @@ export function Dashboard() {
                 <p className="font-mono text-xs text-on-surface/70 mb-4">Share the entire interactive environment. Viewers can switch between all chapters.</p>
                 <button 
                   onClick={() => {
-                    const url = `${window.location.origin}/lab/${sharingProject.id}`;
+                    const url = `${window.location.origin}/lab/${sharingProject.id}?embed=true`;
                     navigator.clipboard.writeText(url);
                     setCopiedId(sharingProject.id);
                     setTimeout(() => setCopiedId(null), 2000);
@@ -465,7 +465,7 @@ export function Dashboard() {
                         </div>
                         <button 
                           onClick={() => {
-                            const url = `${window.location.origin}/lab/${sharingProject.id}?castIndex=${idx}`;
+                            const url = `${window.location.origin}/lab/${sharingProject.id}?embed=true&castIndex=${idx}`;
                             navigator.clipboard.writeText(url);
                             setCopiedCastId(cast.id);
                             setTimeout(() => setCopiedCastId(null), 2000);
