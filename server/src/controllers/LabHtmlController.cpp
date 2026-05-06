@@ -9,7 +9,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
 
     dbClient->execSqlAsync(
         "SELECT name FROM projects WHERE manifest_url LIKE $1",
-        [callback, id](const drogon::orm::Result& r) {
+        [callback, id, req](const drogon::orm::Result& r) {
             std::string document_root = drogon::app().getDocumentRoot();
             if (document_root.empty()) {
                 document_root = "./public";
@@ -32,7 +32,12 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             std::string base_url = env_url ? std::string(env_url) : "https://swacn.com";
             if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
+            std::string query = req->query();
             std::string full_url = base_url + "/lab/" + id;
+            if (!query.empty()) {
+                full_url += "?" + query;
+            }
+            
             std::string encoded_url = drogon::utils::urlEncodeComponent(full_url);
             std::string oembed_url = base_url + "/oembed?url=" + encoded_url + "&format=json";
             std::string share_img = base_url + "/assets/share.png";

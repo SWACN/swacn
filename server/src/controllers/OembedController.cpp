@@ -42,10 +42,12 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             if (title.empty()) title = "Terminal Session";
 
             std::string iframe_url = url;
-            if (iframe_url.find("?") != std::string::npos) {
-                iframe_url += "&embed=true";
-            } else {
-                iframe_url += "?embed=true";
+            if (iframe_url.find("embed=true") == std::string::npos) {
+                if (iframe_url.find("?") != std::string::npos) {
+                    iframe_url += "&embed=true";
+                } else {
+                    iframe_url += "?embed=true";
+                }
             }
 
             Json::Value oembed;
