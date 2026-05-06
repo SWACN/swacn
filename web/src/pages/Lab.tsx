@@ -102,7 +102,7 @@ export function Lab() {
   const currentCast = casts[activeCastIndex];
   const recordingUrl = currentCast 
     ? `/uploads/${currentCast.recording_url}${token ? `?token=${token}` : ''}` 
-    : (id && hasRecording ? `/uploads/${id}/recording.cast${token ? `?token=${token}` : ''}` : null);
+    : (id && hasRecording && casts.length === 0 ? null : (id && hasRecording ? `/uploads/${id}/recording.cast${token ? `?token=${token}` : ''}` : null));
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
