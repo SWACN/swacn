@@ -55,14 +55,17 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["provider_name"] = "SWACN";
             
             const char* env_url = getenv("APP_URL");
-            std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
+            std::string base_url = env_url ? std::string(env_url) : "https://swacn.com";
             if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
             oembed["provider_url"] = base_url;
             
             oembed["width"] = 800;
             oembed["height"] = 600;
+            oembed["thumbnail_url"] = base_url + "/assets/share.png";
+            oembed["thumbnail_width"] = 1200;
+            oembed["thumbnail_height"] = 630;
             
-            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"600\" style=\"border: none; display: block;\" frameborder=\"0\" allowfullscreen></iframe>";
+            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"600\" title=\"" + title + "\" style=\"border: none; display: block;\" frameborder=\"0\" allowfullscreen></iframe>";
             oembed["html"] = html;
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);
