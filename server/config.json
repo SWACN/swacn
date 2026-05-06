@@ -4,13 +4,15 @@
     "document_root": "./public",
     "upload_path": "uploads", 
     "client_max_body_size": "100M",
+    "use_gzip": true,
+    "gzip_static": true,
     "file_types": [
       "html", "js", "css", "json", "cast", "gz", "tar"
     ]
   },
   "listeners": [
     {
-      "address": "0.0.0.0",
+      "address": "127.0.0.1",
       "port": 8080,
       "https": false
     }
