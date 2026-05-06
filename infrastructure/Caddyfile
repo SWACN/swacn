@@ -21,6 +21,11 @@ swacn.com {
         reverse_proxy localhost:8080
     }
 
+    # Proxy webhooks to C++ backend
+    handle /webhooks/* {
+        reverse_proxy localhost:8080
+    }
+
     # Fallback to index.html for SPA routing
     handle {
         try_files {path} /index.html

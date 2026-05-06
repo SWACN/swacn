@@ -54,11 +54,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener('message', handleAuthRequest);
+    
+    // Listen for auth updates from other windows/tabs (like login popup)
+    const authChannel = new BroadcastChannel('swacn_auth');
+    authChannel.onmessage = (event) => {
+      if (event.data?.type === 'SWACN_AUTH' && event.data?.token) {
+        console.log("[Layout] Auth update received via BroadcastChannel");
+        setToken(event.data.token);
+      }
+    };
 
     return () => {
       window.removeEventListener('open-project-creator', handleOpenModal);
       window.removeEventListener('open-login-modal', handleOpenLoginModal);
       window.removeEventListener('message', handleAuthRequest);
+      authChannel.close();
     };
   }, []);
 
