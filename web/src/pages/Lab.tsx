@@ -60,6 +60,8 @@ export function Lab() {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [copiedEmbedCast, setCopiedEmbedCast] = useState(false);
+  const [copiedDirect, setCopiedDirect] = useState(false);
+  const [copiedDirectCast, setCopiedDirectCast] = useState(false);
   const [allowFsDownload, setAllowFsDownload] = useState<boolean>(true);
   const [hasBaseline, setHasBaseline] = useState<boolean>(false);
   const [casts, setCasts] = useState<{id: number, title: string, recording_url: string}[]>([]);
@@ -305,6 +307,25 @@ export function Lab() {
       setContextMenu(null);
       setCopiedEmbed(false);
       setCopiedEmbedCast(false);
+    }, 1000);
+  };
+
+  const copyDirectLink = (e: React.MouseEvent, specificCast: boolean = false) => {
+    e.stopPropagation();
+    if (!id) return;
+    let url = `${window.location.origin}/lab/${id}?embed=true`;
+    if (specificCast) url += `&castIndex=${activeCastIndex}`;
+    
+    navigator.clipboard.writeText(url);
+    if (specificCast) {
+      setCopiedDirectCast(true);
+    } else {
+      setCopiedDirect(true);
+    }
+    setTimeout(() => {
+      setContextMenu(null);
+      setCopiedDirect(false);
+      setCopiedDirectCast(false);
     }, 1000);
   };
 
@@ -1103,20 +1124,37 @@ export function Lab() {
                 style={{ left: contextMenu.x, top: contextMenu.y }}
               >
                 {casts.length > 1 && !isSandboxMode && (
-                  <button 
-                    onClick={(e) => copyEmbedCode(e, true)}
-                    className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbedCast ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
-                  >
-                    {copiedEmbedCast ? <Check size={16} /> : <Share2 size={16} />} 
-                    {copiedEmbedCast ? 'Copied!' : 'Embed Current Chapter'}
-                  </button>
+                  <>
+                    <button 
+                      onClick={(e) => copyEmbedCode(e, true)}
+                      className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbedCast ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
+                    >
+                      {copiedEmbedCast ? <Check size={16} /> : <Share2 size={16} />} 
+                      {copiedEmbedCast ? 'Copied!' : 'Copy Embed Code (Chapter)'}
+                    </button>
+                    <button 
+                      onClick={(e) => copyDirectLink(e, true)}
+                      className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedDirectCast ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
+                    >
+                      {copiedDirectCast ? <Check size={16} /> : <Share2 size={16} />} 
+                      {copiedDirectCast ? 'Copied!' : 'Copy Direct Link (Chapter)'}
+                    </button>
+                    <div className={`h-px mx-2 my-1 ${embedTheme === 'dark' ? 'bg-[#fcf9f0]/20' : 'bg-on-surface/10'}`} />
+                  </>
                 )}
                 <button 
                   onClick={(e) => copyEmbedCode(e, false)}
                   className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedEmbed ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
                 >
                   {copiedEmbed ? <Check size={16} /> : <Share2 size={16} />} 
-                  {copiedEmbed ? 'Copied!' : (casts.length > 1 ? 'Embed Full Project' : 'Embed Project')}
+                  {copiedEmbed ? 'Copied!' : (casts.length > 1 ? 'Copy Embed Code (Full Project)' : 'Copy Embed Code')}
+                </button>
+                <button 
+                  onClick={(e) => copyDirectLink(e, false)}
+                  className={`w-full text-left px-6 py-3 transition-colors flex items-center gap-3 font-bold border-2 border-transparent ${copiedDirect ? 'bg-primary text-white' : (embedTheme === 'dark' ? 'text-[#fcf9f0] hover:border-[#fcf9f0]/40 hover:bg-[#fcf9f0]/10' : 'text-on-surface hover:border-on-surface hover:bg-surface-container-high')}`}
+                >
+                  {copiedDirect ? <Check size={16} /> : <Share2 size={16} />} 
+                  {copiedDirect ? 'Copied!' : (casts.length > 1 ? 'Copy Direct Link (Full Project)' : 'Copy Direct Link')}
                 </button>
               </div>
             )}

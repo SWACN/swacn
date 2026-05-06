@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Terminal, Clock, Share2, Check, ArrowRight, Activity, Grid, Trash2, AlertTriangle, ListVideo, Zap, Star, Lock, Loader2, X } from 'lucide-react';
-import { fetchCasts, fetchMe, getAuthToken, deleteCast, createCheckoutSession } from '../lib/api';
+import { fetchCasts, fetchMe, getAuthToken, deleteCast, createCheckoutSession, fetchCastDetails } from '../lib/api';
 import { Link, useSearchParams } from 'react-router-dom';
 
 export function Dashboard() {
@@ -12,6 +12,10 @@ export function Dashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [sharingProject, setSharingProject] = useState<any | null>(null);
+  const [sharingCasts, setSharingCasts] = useState<any[]>([]);
+  const [loadingSharingDetails, setLoadingSharingDetails] = useState(false);
+  const [copiedCastId, setCopiedCastId] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const paymentStatus = searchParams.get('payment');
   const isPro = user?.is_pro;
@@ -75,12 +79,27 @@ export function Dashboard() {
     );
   }
 
-  const handleShare = (e: React.MouseEvent, castId: string) => {
+  const handleShare = async (e: React.MouseEvent, cast: any) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = `${window.location.origin}/lab/${castId}`;
+    
+    if (cast.cast_count > 1) {
+      setSharingProject(cast);
+      setLoadingSharingDetails(true);
+      try {
+        const details = await fetchCastDetails(cast.id);
+        setSharingCasts(details.casts || []);
+      } catch (err) {
+        console.error("Failed to fetch sharing details:", err);
+      } finally {
+        setLoadingSharingDetails(false);
+      }
+      return;
+    }
+
+    const url = `${window.location.origin}/lab/${cast.id}`;
     navigator.clipboard.writeText(url);
-    setCopiedId(castId);
+    setCopiedId(cast.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -296,7 +315,7 @@ export function Dashboard() {
               </button>
 
               <button 
-                onClick={(e) => handleShare(e, cast.id)}
+                onClick={(e) => handleShare(e, cast)}
                 className="flex-[2] flex items-center justify-center p-4 border-r-4 border-on-surface hover:bg-surface-container-high transition-colors font-mono text-xs font-bold uppercase z-20 relative gap-2"
                 title="Copy Link"
               >
@@ -380,6 +399,92 @@ export function Dashboard() {
               >
                 {isDeleting ? 'Deleting...' : 'Confirm Delete'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Super Project Modal */}
+      {sharingProject && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="bg-white border-4 border-on-surface p-6 md:p-8 max-w-2xl w-full hard-shadow animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="font-headline font-black text-2xl md:text-3xl uppercase tracking-tighter text-on-surface mb-1">Share Super Project</h3>
+                <p className="font-mono text-xs text-on-surface/60 font-bold uppercase">{sharingProject.name}</p>
+              </div>
+              <button 
+                onClick={() => setSharingProject(null)}
+                className="p-2 border-2 border-on-surface hover:bg-surface-container-high transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-grow overflow-y-auto pr-2 space-y-6">
+              {/* Option 1: Master Link */}
+              <div className="border-4 border-on-surface p-6 bg-surface-container-high">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-mono text-sm font-black uppercase tracking-widest text-primary">Master Project Link</h4>
+                  <div className="px-2 py-0.5 bg-primary text-white font-mono text-[10px] font-bold">Recommended</div>
+                </div>
+                <p className="font-mono text-xs text-on-surface/70 mb-4">Share the entire interactive environment. Viewers can switch between all chapters.</p>
+                <button 
+                  onClick={() => {
+                    const url = `${window.location.origin}/lab/${sharingProject.id}`;
+                    navigator.clipboard.writeText(url);
+                    setCopiedId(sharingProject.id);
+                    setTimeout(() => setCopiedId(null), 2000);
+                  }}
+                  className="w-full bg-white border-2 border-on-surface p-3 font-mono text-xs font-bold uppercase flex items-center justify-center gap-3 transition-all hover:-translate-y-0.5 hover:-translate-x-0.5 hard-shadow-sm active:translate-x-0 active:translate-y-0"
+                >
+                  {copiedId === sharingProject.id ? <><Check size={16} className="text-primary" /> Copied Link</> : <><Share2 size={16} /> Copy Full Project Link</>}
+                </button>
+              </div>
+
+              {/* Option 2: Individual Casts */}
+              <div>
+                <h4 className="font-mono text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <ListVideo size={18} /> Direct Chapter Access
+                </h4>
+                
+                {loadingSharingDetails ? (
+                  <div className="flex flex-col items-center py-8 opacity-40">
+                    <Activity className="animate-pulse mb-2" size={24} />
+                    <span className="font-mono text-[10px] font-bold uppercase">Indexing Chapters...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {sharingCasts.map((cast, idx) => (
+                      <div key={cast.id} className="border-2 border-on-surface p-4 flex items-center justify-between bg-white hover:bg-surface-container-low transition-colors group">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 bg-surface-container-high flex items-center justify-center border-2 border-on-surface text-[10px] font-black shrink-0">
+                            {idx + 1}
+                          </div>
+                          <span className="font-mono text-xs font-bold truncate pr-4">{cast.title || `Chapter ${idx + 1}`}</span>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const url = `${window.location.origin}/lab/${sharingProject.id}?castIndex=${idx}`;
+                            navigator.clipboard.writeText(url);
+                            setCopiedCastId(cast.id);
+                            setTimeout(() => setCopiedCastId(null), 2000);
+                          }}
+                          className={`shrink-0 p-2 border-2 border-on-surface transition-all ${copiedCastId === cast.id ? 'bg-primary text-white border-primary' : 'bg-white hover:bg-on-surface hover:text-white'}`}
+                        >
+                          {copiedCastId === cast.id ? <Check size={14} /> : <Share2 size={14} />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-8 pt-4 border-t-2 border-on-surface/10">
+              <p className="font-mono text-[10px] text-on-surface/40 uppercase font-bold text-center">
+                Pro Tip: You can also right-click inside the Lab terminal to get Notion-compatible direct links.
+              </p>
             </div>
           </div>
         </div>

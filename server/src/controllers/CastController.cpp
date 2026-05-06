@@ -410,7 +410,8 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
     
     dbClient->execSqlAsync(
         "SELECT p.id, p.name as title, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, "
-        "(SELECT recording_url FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 1) as recording_url "
+        "(SELECT recording_url FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 1) as recording_url, "
+        "(SELECT COUNT(*) FROM casts c WHERE c.project_id = p.id AND c.deleted_at IS NULL) as cast_count "
         "FROM projects p JOIN users u ON p.user_id = u.id "
         "WHERE u.api_key = $1 AND p.deleted_at IS NULL ORDER BY p.created_at DESC",
         [callback](const drogon::orm::Result& r) {
@@ -429,6 +430,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
                 castObj["name"] = row["title"].isNull() ? "" : row["title"].as<std::string>();
                 castObj["url"] = base_url + "/view/" + uuid;
                 castObj["has_recording"] = !row["recording_url"].isNull();
+                castObj["cast_count"] = row["cast_count"].as<int>();
                 castObj["has_baseline"] = !row["baseline_url"].isNull();
                 castObj["theme"] = row["theme"].isNull() ? "mocha" : row["theme"].as<std::string>();
                 castObj["show_keystrokes"] = row["show_keystrokes"].isNull() ? true : row["show_keystrokes"].as<bool>();
