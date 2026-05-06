@@ -34,13 +34,23 @@ self.onmessage = async (e: MessageEvent) => {
   if (type === 'INIT') {
     console.log('[v86-worker] Initializing V86...');
     const { bios, vgabios, bzimage, wasmModule, projectId, tabId } = payload;
+    console.log(`[v86-worker] Buffer check: bios(${bios.byteLength}), vgabios(${vgabios.byteLength}), bzimage(${bzimage.byteLength})`);
+    console.log(`[v86-worker] Environment: crossOriginIsolated=${(self as any).crossOriginIsolated}`);
+
     try {
       const { V86 } = await import('v86');
 
       emulator = new V86({
         wasm_fn: async (imports: any) => {
-          const instance = await WebAssembly.instantiate(wasmModule as WebAssembly.Module, imports);
-          return instance.exports;
+          console.log('[v86-worker] Instantiating WASM module...');
+          try {
+            const instance = await WebAssembly.instantiate(wasmModule as WebAssembly.Module, imports);
+            console.log('[v86-worker] WASM instantiated, exports:', Object.keys(instance.exports).length);
+            return instance.exports;
+          } catch (wasmErr) {
+            console.error('[v86-worker] WASM instantiation failed:', wasmErr);
+            throw wasmErr;
+          }
         },
         memory_size: 256 * 1024 * 1024,
         vga_memory_size: 8 * 1024 * 1024,
@@ -60,7 +70,7 @@ self.onmessage = async (e: MessageEvent) => {
         scheduleFlush();
       });
       
-      console.log('[v86-worker] V86 initialized successfully');
+      console.log('[v86-worker] V86 constructor finished');
     } catch (err: any) {
       console.error('[v86-worker] Critical initialization error:', err);
       self.postMessage({ type: 'ERROR', data: err.message || 'Unknown V86 error' });
