@@ -195,10 +195,9 @@ export class V86VM {
     // Different tabs → different SharedWorker instances → no cross-tab interference.
     const tabId = getTabScopeId();
     try {
-      const workerUrl = new URL('./relay-worker.ts', import.meta.url).href;
       const sw = new SharedWorker(
-        `${workerUrl}?p=${encodeURIComponent(this.projectId)}&t=${tabId}`,
-        { type: 'module' }
+        new URL('./relay-worker.ts', import.meta.url),
+        { type: 'module', name: `swacn-relay-${this.projectId}-${tabId}` }
       );
       sw.port.start();
       this.relayPort = sw.port;
@@ -227,7 +226,7 @@ export class V86VM {
        K.prompt(this.projectId)].forEach(k => localStorage.removeItem(k));
       localStorage.setItem(K.master(this.projectId), 'alive');
 
-      await this.runAsMaster(manifestUrl, baselineUrl, onStatus, onManifest);
+      await this.runAsMaster(manifestUrl, baselineUrl, onStatus, onManifest, tabId);
       if (!this.disposed) {
         await new Promise<void>(res => { this.disposeResolve = res; });
       }
@@ -382,7 +381,8 @@ export class V86VM {
 
   private async runAsMaster(
     manifestUrl: string | null, baselineUrl: string | null,
-    onStatus: (s: VMStatus) => void, onManifest?: (m: any) => void,
+    onStatus: (s: VMStatus) => void, onManifest: ((m: any) => void) | undefined,
+    tabId: string
   ) {
     console.log('[V86VM] Running as master');
 
@@ -445,12 +445,18 @@ export class V86VM {
       this.worker.onmessage = (e) => {
         if (e.data.type === 'OUTPUT_STR') {
           this.consoleOut(e.data.data);
+        } else if (e.data.type === 'ERROR') {
+          console.error('[V86VM] Worker reported error:', e.data.data);
+          emit('error');
         }
       };
 
       this.worker.postMessage({
         type: 'INIT',
-        payload: { bios: biosData, vgabios: vgabiosData, bzimage: bzimageData, wasmModule }
+        payload: { 
+          bios: biosData, vgabios: vgabiosData, bzimage: bzimageData, wasmModule,
+          projectId: this.projectId, tabId
+        }
       });
 
 

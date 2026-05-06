@@ -33,31 +33,42 @@ self.onmessage = async (e: MessageEvent) => {
 
   if (type === 'INIT') {
     console.log('[v86-worker] Initializing V86...');
-    const { bios, vgabios, bzimage, wasmModule } = payload;
-    const { V86 } = await import('v86');
+    const { bios, vgabios, bzimage, wasmModule, projectId, tabId } = payload;
+    try {
+      const sw = new SharedWorker(
+        new URL('./relay-worker.ts', import.meta.url),
+        { type: 'module', name: `swacn-relay-${projectId}-${tabId}` }
+      );
+      const { V86 } = await import('v86');
 
-    emulator = new V86({
-      wasm_fn: async (imports: any) => {
-        const instance = await WebAssembly.instantiate(wasmModule as WebAssembly.Module, imports);
-        return instance.exports;
-      },
-      memory_size: 256 * 1024 * 1024,
-      vga_memory_size: 8 * 1024 * 1024,
-      bios: { buffer: bios.buffer },
-      vga_bios: { buffer: vgabios.buffer },
-      bzimage: { buffer: bzimage.buffer },
-      filesystem: {},
-      cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0',
-      autostart: true,
-      disable_keyboard: true,
-      disable_mouse: true,
-      disable_speaker: true,
-    });
+      emulator = new V86({
+        wasm_fn: async (imports: any) => {
+          const instance = await WebAssembly.instantiate(wasmModule as WebAssembly.Module, imports);
+          return instance.exports;
+        },
+        memory_size: 256 * 1024 * 1024,
+        vga_memory_size: 8 * 1024 * 1024,
+        bios: { buffer: bios.buffer },
+        vga_bios: { buffer: vgabios.buffer },
+        bzimage: { buffer: bzimage.buffer },
+        filesystem: {},
+        cmdline: 'tsc=reliable mitigations=off random.trust_cpu=on rw init=/bin/sh root=/dev/root rootfstype=ext2 console=ttyS0',
+        autostart: true,
+        disable_keyboard: true,
+        disable_mouse: true,
+        disable_speaker: true,
+      });
 
-    emulator.add_listener('serial0-output-byte', (byte: number) => {
-      pendingOutput += String.fromCharCode(byte);
-      scheduleFlush();
-    });
+      emulator.add_listener('serial0-output-byte', (byte: number) => {
+        pendingOutput += String.fromCharCode(byte);
+        scheduleFlush();
+      });
+      
+      console.log('[v86-worker] V86 initialized successfully');
+    } catch (err: any) {
+      console.error('[v86-worker] Critical initialization error:', err);
+      self.postMessage({ type: 'ERROR', data: err.message || 'Unknown V86 error' });
+    }
   } else if (type === 'SERIAL_SEND') {
     const { data } = payload;
     if (emulator) {
