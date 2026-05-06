@@ -56,7 +56,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"description\" content=\"Interactive terminal lab environment on SWACN.\">\n";
             
             tags << "\n    <!-- Open Graph / Facebook -->\n";
-            tags << "    <meta property=\"og:type\" content=\"video.other\">\n";
+            tags << "    <meta property=\"og:type\" content=\"website\">\n";
             tags << "    <meta property=\"og:url\" content=\"" << full_url << "\">\n";
             tags << "    <meta property=\"og:site_name\" content=\"SWACN\">\n";
             tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << "\">\n";

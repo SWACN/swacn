@@ -52,7 +52,7 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
 
             Json::Value oembed;
             oembed["version"] = "1.0";
-            oembed["type"] = "video";
+            oembed["type"] = "rich";
             oembed["title"] = title;
             oembed["provider_name"] = "SWACN";
             oembed["author_name"] = "SWACN User";
