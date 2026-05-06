@@ -1,0 +1,105 @@
+name: Deploy SWACN
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+      - name: Build Frontend
+        run: |
+          cd web
+          npm install
+          npm run build
+      - name: Upload Frontend Dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/dist
+
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    container:
+      image: drogonframework/drogon:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y libssl-dev cmake g++
+      - name: Build Backend
+        run: |
+          cd server
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+      - name: Upload Backend Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: server/build/swacn_server
+
+  deploy:
+    name: Deploy to DigitalOcean
+    needs: [build-frontend, build-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: deploy-assets
+      - name: Prepare Deployment Package
+        run: |
+          mkdir -p final-deploy/public
+          cp -r deploy-assets/frontend-dist/* final-deploy/public/
+          cp deploy-assets/server-binary/swacn_server final-deploy/
+          cp server/config.json final-deploy/
+          cp server/schema.sql final-deploy/
+          cp infrastructure/Caddyfile final-deploy/
+          cp infrastructure/swacn.service final-deploy/
+      - name: Copy Files to Droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "final-deploy/*"
+          target: "/opt/swacn"
+          strip_components: 1
+      - name: Post-Deployment Steps
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /opt/swacn
+            chmod +x swacn_server
+            
+            # Link systemd service if not exists
+            if [ ! -f /etc/systemd/system/swacn.service ]; then
+              ln -s /opt/swacn/swacn.service /etc/systemd/system/swacn.service
+              systemctl daemon-reload
+              systemctl enable swacn
+            fi
+            
+            # Restart service
+            systemctl restart swacn
+            
+            # Reload Caddy
+            if command -v caddy &> /dev/null; then
+              caddy reload --config /opt/swacn/Caddyfile || caddy start --config /opt/swacn/Caddyfile
+            fi

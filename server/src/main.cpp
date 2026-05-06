@@ -32,15 +32,52 @@ int main() {
     // 1. Load the .env file first
     load_env();
 
-    // 2. Load Drogon config file
-    drogon::app().loadConfigFile("config.json");
+    // 2. Load and merge configuration
+    std::ifstream f("config.json");
+    Json::Value config;
+    if (f.is_open()) {
+        f >> config;
+    } else {
+        LOG_WARN << "config.json not found, using defaults";
+    }
+
+    // 3. Database configuration from env or fallback
+    std::string db_host = getenv("DB_HOST") ? getenv("DB_HOST") : "127.0.0.1";
+    std::string db_port_str = getenv("DB_PORT") ? getenv("DB_PORT") : "5432";
+    std::string db_name = getenv("DB_NAME") ? getenv("DB_NAME") : "swacn_db";
+    std::string db_user = getenv("DB_USER") ? getenv("DB_USER") : "postgres";
+    std::string db_pass = getenv("DB_PASS") ? getenv("DB_PASS") : "postgres";
+
+    Json::Value db_client;
+    db_client["name"] = "default";
+    db_client["rdbms"] = "postgresql";
+    db_client["host"] = db_host;
+    db_client["port"] = std::stoi(db_port_str);
+    db_client["dbname"] = db_name;
+    db_client["user"] = db_user;
+    db_client["password"] = db_pass;
+    db_client["connection_number"] = 5;
     
+    config["db_clients"].append(db_client);
+
+    // 4. Listener configuration from env or fallback
+    std::string listen_addr = getenv("LISTEN_ADDR") ? getenv("LISTEN_ADDR") : "127.0.0.1";
+    std::string listen_port_str = getenv("LISTEN_PORT") ? getenv("LISTEN_PORT") : "8080";
+    
+    Json::Value listener;
+    listener["address"] = listen_addr;
+    listener["port"] = std::stoi(listen_port_str);
+    config["listeners"].append(listener);
+
+    // Apply merged configuration
+    drogon::app().loadConfigJson(config);
+
     // Quick sanity check to ensure the env variables are actually loaded
     if (getenv("GITHUB_CLIENT_ID") == nullptr) {
         LOG_WARN << "WARNING: GITHUB_CLIENT_ID is not set!";
     }
 
-    // 3. Register PreRoutingAdvice to protect private uploads
+    // 5. Register PreRoutingAdvice to protect private uploads
     drogon::app().registerPreRoutingAdvice([](const drogon::HttpRequestPtr &req, drogon::FilterCallback &&fcb, drogon::FilterChainCallback &&fccb) {
         std::string path = req->path();
         if (path.find("/uploads/") == 0) {
@@ -121,7 +158,7 @@ int main() {
         fccb();
     });
 
-    LOG_INFO << "Server running on 0.0.0.0:8080";
+    LOG_INFO << "Server running on " << listen_addr << ":" << listen_port_str;
     
     // 4. Run the fully asynchronous event loop
     drogon::app().run();

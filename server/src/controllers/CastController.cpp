@@ -163,7 +163,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                             // Insert all recordings
                             if (recording_files.empty()) {
                                 const char* env_url = getenv("APP_URL");
-                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
                                 if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
                                 Json::Value ret;
@@ -185,7 +185,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
                                         (*counter)--;
                                         if (*counter == 0) {
                                             const char* env_url = getenv("APP_URL");
-                                            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                            std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
                                             if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
                                             Json::Value ret;
@@ -417,7 +417,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
             Json::Value casts(Json::arrayValue);
             
             const char* env_url = getenv("APP_URL");
-            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+            std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
             if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
             for (auto const& row : r) {
@@ -701,7 +701,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                             
                             auto returnSuccess = [callback, id]() {
                                 const char* env_url = getenv("APP_URL");
-                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+                                std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
                                 if (!base_url.empty() && base_url.back() == '/') {
                                     base_url.pop_back();
                                 }

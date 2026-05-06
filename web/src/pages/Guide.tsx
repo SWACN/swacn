@@ -6,7 +6,7 @@ export function Guide() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 bg-background">
+    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20">
       
       {/* Hero Section */}
       <header className="mb-24 md:mb-32 relative">

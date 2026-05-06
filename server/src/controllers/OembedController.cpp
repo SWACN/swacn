@@ -55,7 +55,8 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["provider_name"] = "SWACN";
             
             const char* env_url = getenv("APP_URL");
-            std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+            std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
+            if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
             oembed["provider_url"] = base_url;
             
             oembed["width"] = 800;

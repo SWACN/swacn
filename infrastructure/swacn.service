@@ -1,0 +1,16 @@
+[Unit]
+Description=SWACN Backend Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/swacn
+# Ensure the .env file exists on the server with production secrets
+EnvironmentFile=/opt/swacn/.env
+ExecStart=/opt/swacn/swacn_server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

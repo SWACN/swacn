@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 
 export function Home() {
   return (
-    <div className="w-full min-h-screen px-4 md:px-8 lg:px-16 xl:px-24 py-8 flex flex-col gap-8 bg-background overflow-x-hidden">
+    <div className="w-full min-h-screen px-4 md:px-8 lg:px-16 xl:px-24 py-8 flex flex-col gap-8 overflow-x-hidden">
       
       {/* 01. HERO GRID: THE CORE UTILITY */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
@@ -14,7 +14,8 @@ export function Home() {
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="col-span-1 md:col-span-8 border-4 border-on-surface bg-white hard-shadow p-8 md:p-12 relative overflow-hidden flex flex-col justify-center"
+          whileHover="hover"
+          className="col-span-1 md:col-span-8 border-4 border-on-surface bg-white hard-shadow p-8 md:p-12 relative overflow-hidden flex flex-col justify-center group"
         >
           <div className="relative z-10">
             <div className="font-mono text-xs font-black uppercase tracking-[0.4em] text-primary mb-6 flex items-center gap-3">
@@ -39,6 +40,28 @@ export function Home() {
               </Link>
             </div>
           </div>
+
+          {/* SUBTLE INTERACTIVE LOGO */}
+          <motion.img 
+            src="/assets/logo.png" 
+            alt="" 
+            className="absolute -bottom-16 -right-16 w-64 md:w-96 opacity-[0.05] pointer-events-none select-none z-0 grayscale"
+            variants={{
+              hover: { 
+                scale: 1.15, 
+                rotate: 8,
+                x: -30,
+                y: -30,
+                opacity: 0.12
+              }
+            }}
+            transition={{ 
+              type: "spring", 
+              stiffness: 400, 
+              damping: 20,
+              mass: 0.5
+            }}
+          />
         </motion.div>
 
         {/* TECHNICAL STACK PANEL */}

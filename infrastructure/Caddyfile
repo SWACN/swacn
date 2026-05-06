@@ -1,0 +1,28 @@
+swacn.com {
+    # Serve static frontend files
+    root * /opt/swacn/public
+    file_server
+
+    # Handle security headers for SharedArrayBuffer (v86 requirement)
+    header {
+        Cross-Origin-Opener-Policy "same-origin"
+        Cross-Origin-Embedder-Policy "require-corp"
+        Access-Control-Allow-Origin "*"
+    }
+
+    # Proxy API requests to C++ backend
+    # Rewrites /api/v1/users/me -> /v1/users/me (matches dev behavior)
+    handle_path /api/* {
+        reverse_proxy localhost:8080
+    }
+
+    # Proxy upload requests
+    handle /uploads/* {
+        reverse_proxy localhost:8080
+    }
+
+    # Fallback to index.html for SPA routing
+    handle {
+        try_files {path} /index.html
+    }
+}

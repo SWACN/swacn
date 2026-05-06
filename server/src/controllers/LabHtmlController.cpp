@@ -20,7 +20,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
     std::string html = buffer.str();
 
     const char* env_url = getenv("APP_URL");
-    std::string base_url = env_url ? std::string(env_url) : "http://localhost:8080";
+    std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";
     if (!base_url.empty() && base_url.back() == '/') {
         base_url.pop_back();
     }

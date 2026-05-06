@@ -9,24 +9,5 @@
     "file_types": [
       "html", "js", "css", "json", "cast", "gz", "tar"
     ]
-  },
-  "listeners": [
-    {
-      "address": "127.0.0.1",
-      "port": 8080,
-      "https": false
-    }
-  ],
-  "db_clients": [
-    {
-      "name": "default",
-      "rdbms": "postgresql",
-      "host": "127.0.0.1",
-      "port": 5432,
-      "dbname": "swacn_db",
-      "user": "postgres",
-      "password": "postgres",
-      "connection_number": 5
-    }
-  ]
+  }
 }

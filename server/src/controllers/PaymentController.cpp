@@ -60,11 +60,15 @@ void PaymentController::createCheckout(
                 return;
             }
 
-            std::string success_url = app_url ? std::string(app_url) + "/dashboard?payment=success" : "http://localhost:3000/dashboard?payment=success";
-            std::string cancel_url  = app_url ? std::string(app_url) + "/dashboard?payment=cancelled" : "http://localhost:3000/dashboard?payment=cancelled";
+            std::string frontend_url = app_url ? std::string(app_url) : "http://localhost:3000";
+            if (!frontend_url.empty() && frontend_url.back() == '/') frontend_url.pop_back();
+
+            std::string success_url = frontend_url + "/dashboard?payment=success";
+            std::string cancel_url  = frontend_url + "/dashboard?payment=cancelled";
 
             // 3. Create checkout session via Dodo Payments API
-            auto dodo_client = drogon::HttpClient::newHttpClient("https://test.dodopayments.com");
+            const char* dodo_base_url = getenv("DODO_PAYMENTS_API_URL") ? getenv("DODO_PAYMENTS_API_URL") : "https://test.dodopayments.com";
+            auto dodo_client = drogon::HttpClient::newHttpClient(dodo_base_url);
             
             Json::Value checkout_body;
             

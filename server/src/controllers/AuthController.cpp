@@ -196,6 +196,8 @@ void AuthController::callback(const drogon::HttpRequestPtr& req, std::function<v
                     }
                     
                     std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
+                    if (!frontend_url.empty() && frontend_url.back() == '/') frontend_url.pop_back();
+
                     auto resp = drogon::HttpResponse::newRedirectionResponse(frontend_url + "/auth-callback?token=" + active_key + popup_param);
                     callback(resp);
                 },
@@ -226,6 +228,8 @@ void AuthController::loginGoogle(const drogon::HttpRequestPtr& req, std::functio
     }
     
     std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
+    if (!frontend_url.empty() && frontend_url.back() == '/') frontend_url.pop_back();
+
     std::string redirect_uri = frontend_url + "/api/auth/google/callback";
     
     std::string redirect_url = "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + client_id + 
@@ -247,6 +251,8 @@ void AuthController::callbackGoogle(const drogon::HttpRequestPtr& req, std::func
     }
 
     std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
+    if (!frontend_url.empty() && frontend_url.back() == '/') frontend_url.pop_back();
+
     std::string redirect_uri = frontend_url + "/api/auth/google/callback";
 
     auto client = drogon::HttpClient::newHttpClient("https://oauth2.googleapis.com");
@@ -336,6 +342,8 @@ void AuthController::callbackGoogle(const drogon::HttpRequestPtr& req, std::func
                     }
                     
                     std::string frontend_url = getenv("APP_URL") ? std::string(getenv("APP_URL")) : "http://localhost:3000";
+                    if (!frontend_url.empty() && frontend_url.back() == '/') frontend_url.pop_back();
+
                     auto resp = drogon::HttpResponse::newRedirectionResponse(frontend_url + "/auth-callback?token=" + active_key + popup_param);
                     callback(resp);
                 },
