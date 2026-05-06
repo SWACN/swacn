@@ -10,8 +10,17 @@ swacn.com {
         Access-Control-Allow-Origin "*"
     }
 
+    # Proxy lab pages to backend for meta-tag injection (SEO/Embedly)
+    handle /lab/* {
+        reverse_proxy localhost:8080
+    }
+
+    # Proxy oEmbed endpoint to backend
+    handle /oembed {
+        reverse_proxy localhost:8080
+    }
+
     # Proxy API requests to C++ backend
-    # Rewrites /api/v1/users/me -> /v1/users/me (matches dev behavior)
     handle_path /api/* {
         reverse_proxy localhost:8080
     }
