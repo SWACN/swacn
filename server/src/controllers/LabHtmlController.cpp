@@ -41,6 +41,12 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             std::string encoded_url = drogon::utils::urlEncodeComponent(full_url);
             std::string oembed_url = base_url + "/oembed?url=" + encoded_url + "&format=json";
             std::string share_img = base_url + "/assets/share.png";
+            std::string embed_url = full_url;
+            if (embed_url.find("?") != std::string::npos) {
+                embed_url += "&embed=true";
+            } else {
+                embed_url += "?embed=true";
+            }
 
             // Build Comprehensive Meta Tags
             std::stringstream tags;
@@ -56,19 +62,19 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << "\">\n";
             tags << "    <meta property=\"og:description\" content=\"Interactive terminal lab environment.\">\n";
             tags << "    <meta property=\"og:image\" content=\"" << share_img << "\">\n";
-            tags << "    <meta property=\"og:video\" content=\"" << full_url << "?embed=true\">\n";
-            tags << "    <meta property=\"og:video:secure_url\" content=\"" << full_url << "?embed=true\">\n";
+            tags << "    <meta property=\"og:video\" content=\"" << embed_url << "\">\n";
+            tags << "    <meta property=\"og:video:secure_url\" content=\"" << embed_url << "\">\n";
             tags << "    <meta property=\"og:video:type\" content=\"text/html\">\n";
             tags << "    <meta property=\"og:video:width\" content=\"800\">\n";
             tags << "    <meta property=\"og:video:height\" content=\"600\">\n";
-
+            
             tags << "\n    <!-- Twitter -->\n";
             tags << "    <meta property=\"twitter:card\" content=\"player\">\n";
             tags << "    <meta property=\"twitter:url\" content=\"" << full_url << "\">\n";
             tags << "    <meta property=\"twitter:title\" content=\"SWACN | " << project_name << "\">\n";
             tags << "    <meta property=\"twitter:description\" content=\"Interactive terminal lab environment.\">\n";
             tags << "    <meta property=\"twitter:image\" content=\"" << share_img << "\">\n";
-            tags << "    <meta property=\"twitter:player\" content=\"" << full_url << "?embed=true\">\n";
+            tags << "    <meta property=\"twitter:player\" content=\"" << embed_url << "\">\n";
             tags << "    <meta property=\"twitter:player:width\" content=\"800\">\n";
             tags << "    <meta property=\"twitter:player:height\" content=\"600\">\n";
 
