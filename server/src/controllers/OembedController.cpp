@@ -70,6 +70,8 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["html"] = html;
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);
+            // Enable Cloudflare Caching for oEmbed (1 hour)
+            resp->addHeader("Cache-Control", "public, max-age=3600");
             callback(resp);
         },
         [callback](const drogon::orm::DrogonDbException& e) {

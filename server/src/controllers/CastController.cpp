@@ -269,7 +269,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
                 
                 dbClient->execSqlAsync(
                     "SELECT id, title, recording_url FROM casts WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC",
-                    [callback, castObj](const drogon::orm::Result& r2) mutable {
+                    [callback, castObj, is_public](const drogon::orm::Result& r2) mutable {
                         castObj["casts"] = Json::arrayValue;
                         for (auto const& c_row : r2) {
                             Json::Value c;
@@ -279,7 +279,11 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
                             castObj["casts"].append(c);
                         }
                         castObj["has_recording"] = (r2.size() > 0);
-                        callback(drogon::HttpResponse::newHttpJsonResponse(castObj));
+                        auto resp = drogon::HttpResponse::newHttpJsonResponse(castObj);
+                        if (is_public) {
+                            resp->addHeader("Cache-Control", "public, max-age=3600");
+                        }
+                        callback(resp);
                     },
                     [callback](const drogon::orm::DrogonDbException& e) {
                         auto resp = drogon::HttpResponse::newHttpResponse();

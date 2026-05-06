@@ -81,6 +81,10 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             resp->setContentTypeCode(drogon::CT_TEXT_HTML);
             // Add oEmbed discovery via HTTP Header
             resp->addHeader("Link", "<" + oembed_url + ">; rel=\"alternate\"; type=\"application/json+oembed\"");
+            
+            // Enable Cloudflare Caching for public projects (1 hour)
+            resp->addHeader("Cache-Control", "public, max-age=3600");
+            
             callback(resp);
         },
         [callback](const drogon::orm::DrogonDbException& e) {
