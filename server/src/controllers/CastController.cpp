@@ -522,7 +522,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
     
     // First verify ownership
     dbClient->execSqlAsync(
-        "SELECT projects.id, projects.user_id, (users.is_pro = true) as is_pro, (users.is_super_admin = true) as is_super_admin FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url LIKE $2 AND projects.deleted_at IS NULL",
+        "SELECT projects.id, projects.user_id, (users.is_pro = true) as is_pro, (users.is_super_admin = true) as is_super_admin FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url ILIKE $2 AND projects.deleted_at IS NULL",
         [req, callback, dbClient, id, like_pattern](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -602,6 +602,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                     }
 
                     std::vector<std::string> recording_files;
+                    bool baseline_uploaded = false;
                     for (auto const& file : fileUpload.getFiles()) {
                         std::string targetName = "";
                         if (file.getItemName().find("recording_") == 0) {
@@ -609,7 +610,13 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                             recording_files.push_back(targetName);
                             targetName += ".cast";
                         }
-                        else targetName = file.getFileName(); 
+                        else {
+                            targetName = file.getFileName();
+                            if (targetName == "baseline.tar.gz" || file.getItemName() == "baseline") {
+                                baseline_uploaded = true;
+                                targetName = "baseline.tar.gz"; // Normalize
+                            }
+                        }
 
                         std::string absolute_save_path = (cast_dir / targetName).string();
                         file.saveAs(absolute_save_path);
@@ -625,8 +632,9 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                     }
 
                     std::string baseline_val = ""; // Baseline might be kept or updated
-                    // Logic to check if baseline exists or was just uploaded
-                    if (fs::exists(cast_dir / "baseline.tar.gz")) {
+                    if (delete_baseline) {
+                        baseline_val = "__DELETE__";
+                    } else if (baseline_uploaded || fs::exists(cast_dir / "baseline.tar.gz")) {
                         baseline_val = id + "/baseline.tar.gz";
                     }
 
@@ -695,16 +703,23 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         }
                     }
 
+                    LOG_INFO << "Updating project ID: " << project_id << " (UUID: " << id << ")";
+                    LOG_INFO << "New baseline_val: " << baseline_val;
+
                     // Update Database Project
                     dbClient->execSqlAsync(
                         "UPDATE projects SET "
                         "name = COALESCE(NULLIF($1, ''), name), "
-                        "baseline_url = CASE WHEN $2 = '__DELETE__' THEN NULL WHEN $2 <> '' THEN $2 ELSE baseline_url END, "
+                        "baseline_url = CASE "
+                        "  WHEN $2 = '__DELETE__' THEN NULL "
+                        "  WHEN $2 <> '' THEN $2 "
+                        "  ELSE baseline_url "
+                        "END, "
                         "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END, "
                         "is_public = CASE WHEN $6 THEN $7 ELSE is_public END "
                         "WHERE id = $4",
                         [callback, dbClient, id, project_id, user_id, project_title, recording_files, cast_titles](const drogon::orm::Result& res) {
-                            
+                            LOG_INFO << "Project update SQL executed for ID: " << project_id;
                             auto returnSuccess = [callback, id]() {
                                 const char* env_url = getenv("APP_URL");
                                 std::string base_url = env_url ? std::string(env_url) : "http://localhost:3000";

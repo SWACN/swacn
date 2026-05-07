@@ -155,6 +155,11 @@ export function Lab() {
 
     const handleProjectCreated = () => {
       refreshProjects();
+      if (id) {
+        fetchCastDetails(id).then(details => {
+          setHasBaseline(details.has_baseline ?? false);
+        }).catch(() => {});
+      }
       setIsSidebarOpen(false);
     };
 
@@ -188,21 +193,20 @@ export function Lab() {
   useEffect(() => {
     if (id) {
       // 1. OPTIMISTIC SYNC FROM CACHED PROJECTS LIST (Removes UI Flash)
-      const cached = projects.find(p => p.id === id);
+      const cached = projects.find(p => p.id === id || p.uuid === id);
       if (cached) {
         if (TERMINAL_THEMES[cached.theme as Theme]) setTheme(cached.theme as Theme);
         setEmbedTheme((cached.embed_theme as 'light' | 'dark') || 'dark');
         setShowKeystrokes(cached.show_keystrokes);
         setAllowFsDownload(cached.allow_fs_download ?? true);
-        setHasBaseline(cached.has_baseline ?? false);
-        setHasRecording(cached.has_recording);
+        // setHasBaseline is intentionally removed from optimistic sync to ensure fresh database state is used
         if (cached.casts) setCasts(cached.casts);
         setIsSandboxMode(!cached.has_recording);
         setProjectName(cached.name || '');
       }
 
-      // 2. FETCH SOURCE OF TRUTH
-      fetchCastDetails(id).then(details => {
+      // 2. FETCH SOURCE OF TRUTH (with cache busting)
+      fetchCastDetails(`${id}?t=${Date.now()}`).then(details => {
         const freshTheme = (details.theme as Theme) || 'swacn-dark';
         const freshEmbedTheme = (details.embed_theme as 'light' | 'dark') || 'dark';
         const freshName = details.name || '';
@@ -211,15 +215,11 @@ export function Lab() {
         setEmbedTheme(freshEmbedTheme);
         setProjectName(freshName);
         
-        // Update local cache
-        localStorage.setItem(`swacn_theme_${id}`, freshTheme);
-        localStorage.setItem(`swacn_embed_theme_${id}`, freshEmbedTheme);
-        localStorage.setItem(`swacn_name_${id}`, freshName);
-
-        setShowKeystrokes(details.show_keystrokes);
-        setAllowFsDownload(details.allow_fs_download ?? true);
+        console.log("[Lab] Project details fetched:", details);
+        setProjectName(details.name || id);
+        setHasRecording(details.has_recording ?? false);
         setHasBaseline(details.has_baseline ?? false);
-        setHasRecording(details.has_recording);
+        setAllowFsDownload(details.allow_fs_download ?? true);
         if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
         setLoadError(null);
@@ -242,7 +242,7 @@ export function Lab() {
     }
   }, [id, projects]);
 
-  const isOwner = !id || projects.some(p => p.id === id);
+  const isOwner = !id || projects.some(p => String(p.id) === String(id) || p.uuid === id);
 
   // Auto-switch to sandbox mode when VM is ready (for default sandbox with no recording)
   useEffect(() => {

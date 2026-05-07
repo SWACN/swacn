@@ -35,7 +35,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
     if (isOpen) {
       fetchMe().then(me => {
         setIsProUser(me.is_pro || me.is_super_admin);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [isOpen]);
 
@@ -52,7 +52,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               existingUrl: c.recording_url,
               uid: Date.now() + i
             }));
-            
+
             // Auto-add an empty slot for Pro users if they are editing
             if (isProUser) {
               existing.push({ file: null, title: '', uid: Date.now() + details.casts.length });
@@ -69,9 +69,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
           setCreateProjectName(prev => prev || data.project || data.environment?.project || '');
           const env = data.env || data.environment?.env || {};
           setCreateEnvVars(Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n'));
-          const binaries = data.binaries?.x86_32 || data.environment?.binaries?.x86_32 || 
-                           data.binaries?.i386 || data.environment?.binaries?.i386 || 
-                           data.binaries?.x86_64 || data.environment?.binaries?.x86_64 || [];
+          const binaries = data.binaries?.x86_32 || data.environment?.binaries?.x86_32 ||
+            data.binaries?.i386 || data.environment?.binaries?.i386 ||
+            data.binaries?.x86_64 || data.environment?.binaries?.x86_64 || [];
           setCreateTools(binaries.map((b: any) => `${b.name}=${b.url}`).join('\n'));
           setExistingBaseline(data.baseline || null);
           if (data.is_public !== undefined) setIsPublic(data.is_public);
@@ -175,13 +175,16 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
         // Case 1: Fetch existing files if editing
         if (editCastId) {
-          const res = await fetch(`/uploads/${editCastId}/baseline.tar.gz`);
+          const token = getAuthToken();
+          const res = await fetch(`/uploads/${editCastId}/baseline.tar.gz${token ? `?token=${token}` : ''}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
           if (res.ok) {
             // @ts-ignore
             const stream = res.body!.pipeThrough(new DecompressionStream('gzip'));
             const decompressed = await new Response(stream).arrayBuffer();
             const existingFiles = TarReader.extractFiles(new Uint8Array(decompressed));
-            
+
             if (!createFiles || createFiles.length === 0) {
               // Not uploading new files
               if (!deleteBaseline) {
@@ -238,7 +241,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
           });
 
           const tarBlob = builder.build();
-          
+
           if (typeof CompressionStream !== 'undefined') {
             const compressedStream = tarBlob.stream().pipeThrough(new CompressionStream('gzip'));
             const gzipBlob = await new Response(compressedStream).blob();
@@ -286,14 +289,17 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       if (editCastId) {
         const { updateCastUpload } = await import('../lib/api');
         await updateCastUpload(editCastId, formData);
-        
+
         try {
           if ('caches' in window) {
             const cache = await caches.open('swacn-assets-v1');
-            await cache.delete(`/uploads/${editCastId}/baseline.tar.gz`);
-            await cache.delete(`/uploads/${editCastId}/manifest.json`);
-            await cache.delete(`/uploads/${editCastId}/recording.cast`);
-            await cache.delete(`/dev-proxy?url=${encodeURIComponent(`/uploads/${editCastId}/baseline.tar.gz`)}`);
+            const keys = await cache.keys();
+            for (const key of keys) {
+              const url = key.url;
+              if (url.includes(`/${editCastId}/`)) {
+                await cache.delete(key);
+              }
+            }
           }
         } catch (e) {
           console.error("Cache clear failed", e);
@@ -350,7 +356,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
         <div className="p-8 overflow-y-auto">
           <h2 className="font-headline text-3xl font-black uppercase mb-4 tracking-tighter">{editCastId ? "Edit Project" : "Create Project"}</h2>
-          
+
           {uploadError && (
             <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-3 mb-6 font-mono text-sm font-bold">
               {uploadError}
@@ -361,8 +367,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             <div className="flex gap-4">
               <div className="flex-1">
                 <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Project Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={createProjectName}
                   onChange={(e) => setCreateProjectName(e.target.value)}
                   className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors"
@@ -372,7 +378,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               {isProUser && (
                 <div className="w-40 sm:w-48">
                   <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Visibility</label>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsPublic(!isPublic)}
                     className={`w-full border-2 p-3 font-mono text-sm font-bold transition-colors flex items-center justify-center gap-2 h-[46px] ${isPublic ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high text-on-surface/50 border-dashed border-on-surface/50 hover:bg-white hover:text-on-surface'}`}
@@ -387,7 +393,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
             <div>
               <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Environment Variables (KEY=value)</label>
-              <textarea 
+              <textarea
                 value={createEnvVars}
                 onChange={(e) => setCreateEnvVars(e.target.value)}
                 className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
@@ -397,7 +403,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
 
             <div>
               <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Tool Binaries (name=url, one per line)</label>
-              <textarea 
+              <textarea
                 value={createTools}
                 onChange={(e) => setCreateTools(e.target.value)}
                 className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
@@ -409,14 +415,14 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Welcome Message (printed on boot)</label>
               {!showWelcomeEditor && editCastId ? (
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowWelcomeEditor(true)}
                     className="flex-1 bg-surface-container-high border-2 border-dashed border-on-surface/50 p-4 font-mono text-sm font-bold text-on-surface/70 hover:bg-white transition-colors"
                   >
                     CHANGE WELCOME MESSAGE
                   </button>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { setDeleteWelcome(!deleteWelcome); if (!deleteWelcome) setCreateWelcomeMessage(''); }}
                     className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${deleteWelcome ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
@@ -425,7 +431,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   </button>
                 </div>
               ) : (
-                <textarea 
+                <textarea
                   value={createWelcomeMessage}
                   onChange={(e) => setCreateWelcomeMessage(e.target.value)}
                   className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
@@ -437,14 +443,14 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               <label className="font-mono text-xs font-bold uppercase text-primary block mb-2">Initialization Script (init.sh)</label>
               {!showInitEditor && editCastId ? (
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowInitEditor(true)}
                     className="flex-1 bg-surface-container-high border-2 border-dashed border-on-surface/50 p-4 font-mono text-sm font-bold text-on-surface/70 hover:bg-white transition-colors"
                   >
                     CHANGE INIT SCRIPT
                   </button>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { setDeleteInit(!deleteInit); if (!deleteInit) setCreateInitScript(''); }}
                     className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${deleteInit ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
@@ -453,7 +459,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   </button>
                 </div>
               ) : (
-                <textarea 
+                <textarea
                   value={createInitScript}
                   onChange={(e) => setCreateInitScript(e.target.value)}
                   className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
@@ -467,10 +473,10 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               <div className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${deleteBaseline ? 'border-dashed border-on-surface/30 bg-surface-container-low' : 'border-on-surface bg-surface-container-high'}`}>
                 <div className={`${(createFiles && createFiles.length > 0 || editCastId) ? 'flex-1' : 'w-full flex justify-center'}`}>
                   <label className={`block ${(createFiles && createFiles.length > 0 || editCastId) ? 'w-full' : 'w-full max-w-xs'} border-2 ${(!createFiles || createFiles.length === 0) ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${deleteBaseline ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       // @ts-ignore
-                      webkitdirectory="true" 
+                      webkitdirectory="true"
                       directory=""
                       onChange={(e) => {
                         setCreateFiles(e.target.files);
@@ -484,7 +490,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                       <span className="font-mono text-sm font-bold uppercase text-on-surface/70 group-hover:scale-105 transition-transform text-center">
                         {createFiles && createFiles.length > 0 ? "New Folder Selected" : (editCastId ? "Replace Folder" : "Select Folder")}
                       </span>
-                      
+
                       {createFiles && createFiles.length > 0 && (
                         <span className="text-xs opacity-70 font-mono text-primary font-bold">
                           {createFiles[0].webkitRelativePath ? createFiles[0].webkitRelativePath.split('/')[0] : 'Project'} ({createFiles.length} files)
@@ -494,17 +500,13 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   </label>
                 </div>
                 {(editCastId || (createFiles && createFiles.length > 0)) && (
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
-                      if (editCastId && (!createFiles || createFiles.length === 0)) {
-                        const newState = !deleteBaseline;
-                        setDeleteBaseline(newState);
-                        if (newState) setCreateFiles(null);
-                      } else {
-                        // For new projects or if they just picked a new folder to replace the old one
+                      if (createFiles && createFiles.length > 0) {
                         setCreateFiles(null);
-                        setDeleteBaseline(false);
+                      } else if (editCastId) {
+                        setDeleteBaseline(!deleteBaseline);
                       }
                     }}
                     className={`px-3 py-3 border-2 font-mono text-sm font-bold transition-colors whitespace-nowrap ${(editCastId && deleteBaseline && (!createFiles || createFiles.length === 0)) ? 'bg-on-surface text-background border-on-surface' : 'bg-surface-container-high border-on-surface/20 text-on-surface/50 hover:bg-on-surface/10 hover:text-on-surface'}`}
@@ -524,20 +526,20 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                   <div key={rec.uid} className={`flex flex-col md:flex-row gap-2 border-2 p-4 transition-colors items-stretch ${rec.deleted ? 'border-dashed border-on-surface/30 bg-surface-container-low' : 'border-on-surface bg-surface-container-high'}`}>
                     <div className={`${(rec.file || rec.id) ? 'flex-1' : 'w-full flex justify-center'}`}>
                       <label className={`flex flex-col items-center justify-center ${(rec.file || rec.id) ? 'w-full h-full' : 'w-full max-w-xs'} border-2 ${!rec.file && !rec.id ? 'border-dashed border-on-surface/50' : 'border-on-surface'} p-3 cursor-pointer hover:bg-white transition-colors group ${rec.deleted ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <input 
-                          type="file" 
+                        <input
+                          type="file"
                           accept=".cast"
                           onChange={(e) => {
                             const file = e.target.files?.[0] || null;
                             const newRecs = [...recordings];
                             newRecs[idx].file = file;
                             newRecs[idx].deleted = false;
-                            
+
                             // If this was the last slot and we are Pro, add a new empty slot
                             if (isProUser && idx === recordings.length - 1 && file) {
                               newRecs.push({ file: null, title: '', uid: Date.now() });
                             }
-                            
+
                             setRecordings(newRecs);
                           }}
                           className="hidden"
@@ -558,8 +560,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                     {(rec.file || rec.id) && (
                       <div className={`${isProUser ? 'flex-[2]' : ''} flex gap-2 items-stretch`}>
                         {isProUser && (
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             value={rec.title}
                             onChange={(e) => {
                               const newRecs = [...recordings];
@@ -571,7 +573,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
                             placeholder="Optional Cast Title"
                           />
                         )}
-                        <button 
+                        <button
                           type="button"
                           onClick={() => {
                             if (rec.id) {
@@ -596,7 +598,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
             </div>
 
             <div className="pt-6">
-              <button 
+              <button
                 type="submit"
                 disabled={isUploading}
                 className={`w-full border-4 border-on-surface px-8 py-4 text-xl font-bold transition-none hard-shadow flex items-center justify-center gap-4 ${isUploading ? 'bg-surface-container-high text-on-surface/50 cursor-not-allowed' : 'bg-primary text-white hover:translate-x-[4px] hover:translate-y-[4px]'}`}
