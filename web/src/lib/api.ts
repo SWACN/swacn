@@ -22,6 +22,11 @@ export async function fetchMe() {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   
+  if (res.status === 401) {
+    logout();
+    throw new Error("Session expired. Please sign in again.");
+  }
+  
   if (!res.ok) throw new Error("Failed to fetch user profile");
   return res.json();
 }
@@ -39,6 +44,11 @@ export async function fetchCasts() {
     }
   });
   
+  if (res.status === 401) {
+    logout();
+    throw new Error("Session expired. Please sign in again.");
+  }
+  
   if (!res.ok) throw new Error("Failed to fetch casts");
   return res.json();
 }
@@ -52,6 +62,10 @@ export async function fetchCastDetails(id: string) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`/api/v1/casts/${id}`, { headers });
+  if (res.status === 401) {
+    logout();
+    throw new Error("Session expired. Please sign in again.");
+  }
   if (!res.ok) {
     const err = new Error("Failed to fetch cast details") as any;
     err.status = res.status;

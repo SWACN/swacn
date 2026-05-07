@@ -40,6 +40,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
   }, [isOpen]);
 
   React.useEffect(() => {
+    const token = getAuthToken();
     if (isOpen && editCastId) {
       fetchCastDetails(editCastId)
         .then(details => {
@@ -63,7 +64,8 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
         })
         .catch(err => console.error("Failed to fetch cast details for edit", err));
 
-      fetch(`/uploads/${editCastId}/manifest.json`)
+      const manifestUrl = `/uploads/${editCastId}/manifest.json?${token ? `token=${token}&` : ''}t=${Date.now()}`;
+      fetch(manifestUrl)
         .then(res => res.json())
         .then(data => {
           setCreateProjectName(prev => prev || data.project || data.environment?.project || '');

@@ -14,17 +14,20 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
         return;
     }
     std::string api_key = auth_header.substr(7);
+    LOG_INFO << "Received API Key for upload: " << api_key;
 
     auto dbClient = drogon::app().getDbClient();
     dbClient->execSqlAsync(
         "SELECT id, (is_pro = true) as is_pro, (is_super_admin = true) as is_super_admin FROM users WHERE api_key = $1",
-        [req, callback, dbClient](const drogon::orm::Result& r) {
+        [req, callback, dbClient, api_key](const drogon::orm::Result& r) {
             if (r.empty()) {
+                LOG_WARN << "No user found for API Key: " << api_key;
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k401Unauthorized);
                 callback(resp);
                 return;
             }
+            LOG_INFO << "Authenticated user ID for upload: " << r[0]["id"].as<int>();
             int user_id = r[0]["id"].as<int>();
             bool is_pro = r[0]["is_pro"].isNull() ? false : r[0]["is_pro"].as<bool>();
             bool is_super_admin = r[0]["is_super_admin"].isNull() ? false : r[0]["is_super_admin"].as<bool>();
@@ -240,11 +243,13 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
     auto dbClient = drogon::app().getDbClient();
     std::string like_pattern = id + "/%";
     
+    LOG_INFO << "Fetching project details for ID: " << id;
     dbClient->execSqlAsync(
         "SELECT p.id, p.name, p.manifest_url, p.baseline_url, p.theme, p.show_keystrokes, p.allow_fs_download, p.embed_theme, p.created_at, (p.is_public = true) as is_public, p.user_id "
-        "FROM projects p WHERE p.manifest_url LIKE $1 AND p.deleted_at IS NULL",
+        "FROM projects p WHERE p.manifest_url ILIKE $1 AND p.deleted_at IS NULL",
         [req, callback, dbClient, id](const drogon::orm::Result& r) {
             if (r.empty()) {
+                LOG_WARN << "Project not found for UUID pattern: " << id;
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k404NotFound);
                 callback(resp);
@@ -525,11 +530,13 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
         "SELECT projects.id, projects.user_id, (users.is_pro = true) as is_pro, (users.is_super_admin = true) as is_super_admin FROM projects JOIN users ON projects.user_id = users.id WHERE users.api_key = $1 AND projects.manifest_url ILIKE $2 AND projects.deleted_at IS NULL",
         [req, callback, dbClient, id, like_pattern](const drogon::orm::Result& r) {
             if (r.empty()) {
+                LOG_WARN << "Update ownership check failed for project ID: " << id << " with pattern: " << like_pattern;
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k403Forbidden);
                 callback(resp);
                 return;
             }
+            LOG_INFO << "Update ownership check passed for project ID: " << id;
             int project_id = r[0]["id"].as<int>();
             int user_id = r[0]["user_id"].as<int>();
             bool is_pro = r[0]["is_pro"].isNull() ? false : r[0]["is_pro"].as<bool>();
@@ -634,8 +641,12 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                     std::string baseline_val = ""; // Baseline might be kept or updated
                     if (delete_baseline) {
                         baseline_val = "__DELETE__";
+                        LOG_INFO << "Baseline deletion requested for project: " << id;
                     } else if (baseline_uploaded || fs::exists(cast_dir / "baseline.tar.gz")) {
                         baseline_val = id + "/baseline.tar.gz";
+                        LOG_INFO << "Baseline confirmed on disk for project: " << id;
+                    } else {
+                        LOG_INFO << "No baseline found or uploaded for project: " << id;
                     }
 
                     bool has_keystrokes = false;
