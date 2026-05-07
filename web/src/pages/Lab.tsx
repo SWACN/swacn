@@ -73,6 +73,8 @@ export function Lab() {
     const cached = localStorage.getItem(`swacn_embed_theme_${id}`);
     return (cached as 'light' | 'dark') || 'dark';
   });
+  const [bootCounter, setBootCounter] = useState(0);
+  const tabId = useMemo(() => Math.random().toString(36).substring(2, 15), []);
 
 
 
@@ -95,12 +97,13 @@ export function Lab() {
   const playerInstance = useRef<any>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<XTerm | null>(null);
+  const vmInstance = useRef<V86VM | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lastKeyTimeRef = useRef<number>(-1);
 
   const isDefaultSandbox = !id;
-  const manifestUrl = useMemo(() => id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${id}` : null, [id, token]);
-  const baselineUrl = useMemo(() => (id && hasBaseline) ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${id}` : null, [id, token, hasBaseline]);
+  const manifestUrl = useMemo(() => id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${Date.now()}` : null, [id, token, bootCounter]);
+  const baselineUrl = useMemo(() => id ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${Date.now()}` : null, [id, token, bootCounter]);
   const currentCast = casts[activeCastIndex];
   const recordingUrl = useMemo(() => {
     if (currentCast) return `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${currentCast.id}`;
@@ -159,13 +162,8 @@ export function Lab() {
     };
 
     const handleProjectCreated = () => {
-      refreshProjects();
-      if (id) {
-        fetchCastDetails(id).then(details => {
-          setHasBaseline(details.has_baseline ?? false);
-        }).catch(() => {});
-      }
-      setIsSidebarOpen(false);
+      // Force a full page reload to ensure all caches and VM state are completely cleared
+      window.location.reload();
     };
 
     window.addEventListener('message', handleMessage);
@@ -193,7 +191,7 @@ export function Lab() {
     setVmStatus('initializing');
     setIsPlaying(true);
     setIsSidebarOpen(false);
-  }, [id]);
+  }, [id, bootCounter]);
 
   useEffect(() => {
     if (id) {
@@ -507,6 +505,7 @@ export function Lab() {
     term.loadAddon(fitAddon);
 
     xtermInstance.current = term;
+    if (terminalRef.current) terminalRef.current.innerHTML = '';
     term.open(terminalRef.current);
     
     // Initial fit attempt
@@ -514,11 +513,11 @@ export function Lab() {
       if (isSandboxMode) fitAddon.fit();
     }, 100);
     
-    const vm = new V86VM(term, id ?? 'sandbox');
-    vm.boot(manifestUrl, baselineUrl, (status) => setVmStatus(status), (manifest) => {
-      // Manifest boot callback - we keep it for potential future metadata but 
-      // rely on the top-level project state for isSandboxMode/hasRecording.
-    });
+    const bootTimer = setTimeout(() => {
+      const vm = new V86VM(term, id ?? 'sandbox');
+      vmInstance.current = vm;
+      vm.boot(manifestUrl, baselineUrl, (status) => setVmStatus(status), undefined);
+    }, 200);
 
     let resizeTimeout: ReturnType<typeof setTimeout>;
     const resizeObserver = new ResizeObserver(() => {
@@ -530,8 +529,8 @@ export function Lab() {
         // Debounce the VM stty commands to prevent serial port flooding
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-          if (xtermInstance.current && vm) {
-            vm.setTerminalSize(xtermInstance.current.cols, xtermInstance.current.rows);
+          if (xtermInstance.current && vmInstance.current) {
+            vmInstance.current.setTerminalSize(xtermInstance.current.cols, xtermInstance.current.rows);
           }
         }, 300);
       } catch (err) {
@@ -546,12 +545,14 @@ export function Lab() {
 
     return () => {
       resizeObserver.disconnect();
-      vm.dispose();
+      vmInstance.current?.dispose();
+      vmInstance.current = null;
       term.dispose();
       xtermInstance.current = null;
       fitAddonRef.current = null;
+      clearTimeout(bootTimer);
     };
-  }, [id]); 
+  }, [id, bootCounter]); 
 
   // Re-fit when switching to sandbox mode (terminal becomes visible)
   useEffect(() => {

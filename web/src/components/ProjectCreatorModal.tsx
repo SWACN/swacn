@@ -95,8 +95,6 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       setDeleteWelcome(false);
       setDeleteInit(false);
       setDeleteBaseline(false);
-      setDeleteInit(false);
-      setDeleteBaseline(false);
       setCreateFiles(null);
     }
   }, [isOpen, editCastId]);
@@ -170,7 +168,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
       const formData = new FormData();
       let totalSize = 0;
 
-      if ((createFiles && createFiles.length > 0) || (editCastId && (showWelcomeEditor || showInitEditor || deleteWelcome || deleteInit || deleteBaseline))) {
+      if ((createFiles && createFiles.length > 0) || createWelcomeMessage.trim() || createInitScript.trim() || (editCastId && (showWelcomeEditor || showInitEditor || deleteWelcome || deleteInit || deleteBaseline))) {
         manifest.baseline = "baseline.tar.gz";
         const builder = new TarBuilder();
         const filesToBundle: Record<string, Uint8Array> = {};
@@ -178,8 +176,13 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
         // Case 1: Fetch existing files if editing
         if (editCastId) {
           const token = getAuthToken();
-          const res = await fetch(`/uploads/${editCastId}/baseline.tar.gz${token ? `?token=${token}` : ''}`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          const res = await fetch(`/uploads/${editCastId}/baseline.tar.gz?t=${Date.now()}${token ? `&token=${token}` : ''}`, {
+            cache: 'no-store',
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
           });
           if (res.ok) {
             // @ts-ignore
@@ -435,7 +438,10 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               ) : (
                 <textarea
                   value={createWelcomeMessage}
-                  onChange={(e) => setCreateWelcomeMessage(e.target.value)}
+                  onChange={(e) => {
+                    setCreateWelcomeMessage(e.target.value);
+                    if (e.target.value.trim()) setDeleteWelcome(false);
+                  }}
                   className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
                   placeholder="Welcome to the SWACN sandbox! Type 'help' to begin."
                 />
@@ -463,7 +469,10 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
               ) : (
                 <textarea
                   value={createInitScript}
-                  onChange={(e) => setCreateInitScript(e.target.value)}
+                  onChange={(e) => {
+                    setCreateInitScript(e.target.value);
+                    if (e.target.value.trim()) setDeleteInit(false);
+                  }}
                   className="w-full bg-surface-container-high border-2 border-on-surface p-3 font-mono text-sm outline-none focus:border-primary transition-colors min-h-[80px]"
                   placeholder="#!/bin/sh&#10;echo 'Setting up environment...'&#10;npm install"
                 />

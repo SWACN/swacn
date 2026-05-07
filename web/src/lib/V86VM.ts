@@ -40,9 +40,26 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
     let cached = await checkCache();
     if (cached) { console.log(`[V86VM] Cache hit: ${url}`); return cached; }
     console.log(`[V86VM] Cache miss: ${url}`);
+    if (url.includes('/uploads/')) {
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      if (!res.ok) throw new Error(`Failed to fetch asset: ${res.statusText}`);
+      return new Uint8Array(await res.arrayBuffer());
+    }
     const performFetch = async () => {
       const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
-      const res = await fetch(fetchUrl);
+      const res = await fetch(fetchUrl, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const buffer = await res.arrayBuffer();
       try {
@@ -491,10 +508,12 @@ export class V86VM {
           emit('downloading_baseline');
           try {
             const bd = await baselinePromise;
+            if (!bd) throw new Error("Baseline data is null");
             emit('extracting_baseline');
             this.worker?.postMessage({ type: 'CREATE_FILE', payload: { name: 'baseline.tar.gz', data: bd } });
-            // Combine extract + cleanup into one round-trip
-            await this.execWait('zcat /mnt/baseline.tar.gz | tar -xf - -C /home/swacn; rm /mnt/baseline.tar.gz');
+            // Combine extract + cleanup into one round-trip. 
+            // We use a small loop to wait for the file to appear in the 9p mount (dynamic update might have a tiny delay).
+            await this.execWait('for i in $(seq 1 20); do if [ -f /mnt/baseline.tar.gz ]; then break; fi; sleep 0.1; done; gunzip -c /mnt/baseline.tar.gz | tar -xf - -C /home/swacn; rm /mnt/baseline.tar.gz');
           } catch (err) { console.error('[V86VM] baseline failed', err); }
         }
 
@@ -512,8 +531,8 @@ export class V86VM {
               if (!ip.endsWith(tool.name)) ip = ip.endsWith('/') ? `${ip}${tool.name}` : `${ip}/${tool.name}`;
               const dir = ip.substring(0, ip.lastIndexOf('/'));
               this.worker?.postMessage({ type: 'CREATE_FILE', payload: { name: fn, data } });
-              // All 4 ops in one round-trip: mkdir + cp + chmod + rm
-              await this.execWait(`mkdir -p ${dir}; cp /mnt/${fn} ${ip}; chmod +x ${ip}; rm /mnt/${fn}`);
+              // All 4 ops in one round-trip: wait + mkdir + cp + chmod + rm
+              await this.execWait(`for i in $(seq 1 20); do if [ -f /mnt/${fn} ]; then break; fi; sleep 0.1; done; mkdir -p ${dir}; cp /mnt/${fn} ${ip}; chmod +x ${ip}; rm /mnt/${fn}`);
             }
           } catch (err) { console.error('[V86VM] tools failed', err); }
         }
