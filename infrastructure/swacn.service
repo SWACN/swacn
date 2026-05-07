@@ -8,6 +8,7 @@ User=root
 WorkingDirectory=/opt/swacn
 # Ensure the .env file exists on the server with production secrets
 EnvironmentFile=/opt/swacn/.env
+ExecStartPre=/usr/bin/mkdir -p /opt/swacn/logs
 ExecStart=/opt/swacn/swacn_server
 Restart=always
 RestartSec=5

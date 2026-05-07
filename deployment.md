@@ -86,6 +86,8 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --d
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install caddy postgresql postgresql-contrib
+sudo mkdir -p /var/log/caddy
+sudo chown caddy:caddy /var/log/caddy
 ```
 
 ### C. Database Initialization
@@ -122,6 +124,8 @@ DODO_PAYMENTS_API_KEY=...
 DODO_PAYMENTS_API_URL=https://api.dodopayments.com
 DODO_PAYMENTS_WEBHOOK_SECRET=...
 DODO_PRO_PRODUCT_ID=...
+LOG_PATH=/opt/swacn/logs
+LOG_LEVEL=INFO
 ```
 
 ---
@@ -165,7 +169,9 @@ In your Repo **Settings > Secrets > Actions**, add:
 ## 6. Verification & Troubleshooting
 
 - **Check App Status**: `systemctl status swacn`
-- **View App Logs**: `journalctl -u swacn -f`
+- **View App Logs (Real-time)**: `journalctl -u swacn -f`
+- **Check Backend Log Files**: `tail -f /opt/swacn/logs/swacn.log`
+- **Check Caddy Access Logs**: `tail -f /var/log/caddy/swacn.access.log`
 - **Check Web Server**: `systemctl status caddy`
 - **Initial DB Schema**: Run `psql -U swacn_user -d swacn_db -f /opt/swacn/schema.sql` on the server once after the first deploy.
 

@@ -69,6 +69,18 @@ int main() {
     listener["port"] = std::stoi(listen_port_str);
     config["listeners"].append(listener);
 
+    // 5. Logging configuration from env or fallback
+    std::string log_path = getenv("LOG_PATH") ? getenv("LOG_PATH") : "./logs";
+    std::string log_level = getenv("LOG_LEVEL") ? getenv("LOG_LEVEL") : "DEBUG";
+    
+    Json::Value logging;
+    logging["log_path"] = log_path;
+    logging["logfile_base_name"] = "swacn";
+    logging["log_size_limit"] = 100000000; // 100MB
+    logging["log_level"] = log_level;
+    logging["display_local_time"] = true;
+    config["logging"] = logging;
+
     // Apply merged configuration
     drogon::app().loadConfigJson(config);
 
