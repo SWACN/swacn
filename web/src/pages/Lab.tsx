@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Settings, SquareTerminal, Palette, ListVideo, Play, Pause, XCircle, Menu, Share2, Check, ExternalLink, Download, LogOut, ChevronLeft, ChevronRight, Lock as LockIcon, LogIn } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -99,12 +99,17 @@ export function Lab() {
   const lastKeyTimeRef = useRef<number>(-1);
 
   const isDefaultSandbox = !id;
-  const manifestUrl = id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${Date.now()}` : null;
-  const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${Date.now()}` : null;
+  const manifestUrl = useMemo(() => id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${id}` : null, [id, token]);
+  const baselineUrl = useMemo(() => (id && hasBaseline) ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${id}` : null, [id, token, hasBaseline]);
   const currentCast = casts[activeCastIndex];
-  const recordingUrl = currentCast 
-    ? `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${Date.now()}` 
-    : (id && hasRecording && casts.length === 0 ? null : (id && hasRecording ? `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${Date.now()}` : null));
+  const recordingUrl = useMemo(() => {
+    if (currentCast) return `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${currentCast.id}`;
+    if (id && hasRecording) {
+      if (casts.length === 0) return null;
+      return `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${id}`;
+    }
+    return null;
+  }, [id, token, hasRecording, currentCast, casts.length]);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {

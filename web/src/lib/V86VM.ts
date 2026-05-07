@@ -472,10 +472,13 @@ export class V86VM {
         this.outputBuffer.endsWith('% '), 50);
       if (this.disposed) return;
 
-      // ── Batch initial setup into ONE round-trip ──────────────────────────
+      // ── Initial setup: disable echo first to avoid command echoing into markers ──
+      this.worker?.postMessage({ type: 'SERIAL_SEND', payload: { data: 'stty -echo\n' } });
+      await mcSleep(100);
+
       await this.execWait(
-        'stty -echo; mkdir -p /home/swacn; cd /home/swacn; ' +
-        'mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/; ' +
+        'mkdir -p /home/swacn; cd /home/swacn; ' +
+        '(mount | grep -q "/mnt") || mount -t 9p -o trans=virtio host9p /mnt/ 2>/dev/null || true; ' +
         '(while true; do if [ -f /mnt/winsize ]; then stty $(cat /mnt/winsize) < /dev/ttyS0 2>/dev/null; rm /mnt/winsize; fi; sleep 0.5; done &) '
       );
 
