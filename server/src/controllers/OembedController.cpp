@@ -29,7 +29,7 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
     
     dbClient->execSqlAsync(
         "SELECT name as title FROM projects WHERE manifest_url LIKE $1",
-        [callback, url, uuid](const drogon::orm::Result& r) {
+        [callback, url, uuid, req](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
                 resp->setStatusCode(drogon::k404NotFound);
@@ -62,13 +62,24 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             if (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
             oembed["provider_url"] = base_url;
             
-            oembed["width"] = 800;
-            oembed["height"] = 600;
+            std::string maxwidth_str = req->getParameter("maxwidth");
+            std::string maxheight_str = req->getParameter("maxheight");
+            int width = 800;
+            int height = 500;
+            try {
+                if (!maxwidth_str.empty()) width = std::stoi(maxwidth_str);
+                if (!maxheight_str.empty()) height = std::stoi(maxheight_str);
+            } catch (...) {}
+
+            oembed["width"] = width;
+            oembed["height"] = height;
             oembed["thumbnail_url"] = base_url + "/assets/share.png";
             oembed["thumbnail_width"] = 1200;
             oembed["thumbnail_height"] = 630;
             
-            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"800\" height=\"500\" title=\"" + title + "\" style=\"border: none; display: block; max-width: 100%; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden;\" frameborder=\"0\" allowfullscreen></iframe>";
+            // Use numeric attributes for width/height for spec compliance, 
+            // but use 100% in style so it fills Notion's resizable container.
+            std::string html = "<iframe src=\"" + iframe_url + "\" width=\"" + std::to_string(width) + "\" height=\"" + std::to_string(height) + "\" title=\"" + title + "\" style=\"border: none; width: 100%; height: 100%; border-radius: 8px; overflow: hidden;\" frameborder=\"0\" allowfullscreen></iframe>";
             oembed["html"] = html;
             
             auto resp = drogon::HttpResponse::newHttpJsonResponse(oembed);
