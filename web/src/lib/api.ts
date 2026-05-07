@@ -32,7 +32,11 @@ export async function fetchCasts() {
   if (!token) throw new Error("Not authenticated");
 
   const res = await fetch('/api/v1/casts', {
-    headers: { 'Authorization': `Bearer ${token}` }
+    headers: { 
+      'Authorization': `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
   });
   
   if (!res.ok) throw new Error("Failed to fetch casts");
@@ -41,7 +45,10 @@ export async function fetchCasts() {
 
 export async function fetchCastDetails(id: string) {
   const token = getAuthToken();
-  const headers: any = {};
+  const headers: any = {
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`/api/v1/casts/${id}`, { headers });

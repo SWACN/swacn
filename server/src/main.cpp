@@ -157,6 +157,16 @@ int main() {
         }
         fccb();
     });
+    
+    // 6. Register PostHandlingAdvice to disable caching for uploads
+    drogon::app().registerPostHandlingAdvice([](const drogon::HttpRequestPtr &req, const drogon::HttpResponsePtr &resp) {
+        std::string path = req->path();
+        if (path.find("/uploads/") == 0 || path.find("/api/") == 0) {
+            resp->addHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+            resp->addHeader("Pragma", "no-cache");
+            resp->addHeader("Expires", "0");
+        }
+    });
 
     LOG_INFO << "Server running on " << listen_addr << ":" << listen_port_str;
     

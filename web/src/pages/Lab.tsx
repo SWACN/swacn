@@ -99,12 +99,12 @@ export function Lab() {
   const lastKeyTimeRef = useRef<number>(-1);
 
   const isDefaultSandbox = !id;
-  const manifestUrl = id ? `/uploads/${id}/manifest.json${token ? `?token=${token}` : ''}` : null;
-  const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz${token ? `?token=${token}` : ''}` : null;
+  const manifestUrl = id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${Date.now()}` : null;
+  const baselineUrl = id ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${Date.now()}` : null;
   const currentCast = casts[activeCastIndex];
   const recordingUrl = currentCast 
-    ? `/uploads/${currentCast.recording_url}${token ? `?token=${token}` : ''}` 
-    : (id && hasRecording && casts.length === 0 ? null : (id && hasRecording ? `/uploads/${id}/recording.cast${token ? `?token=${token}` : ''}` : null));
+    ? `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${Date.now()}` 
+    : (id && hasRecording && casts.length === 0 ? null : (id && hasRecording ? `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${Date.now()}` : null));
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
