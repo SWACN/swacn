@@ -177,6 +177,36 @@ In your Repo **Settings > Secrets > Actions**, add:
 
 ---
 
+## 7. Log Management
+
+The system is configured to use rotating file-based logs. If you need to set them up or check them manually:
+
+### A. Manual Directory Setup
+If the directories are not created automatically, run:
+```bash
+# Backend logs
+sudo mkdir -p /opt/swacn/logs
+sudo chmod 755 /opt/swacn/logs
+
+# Caddy logs
+sudo mkdir -p /var/log/caddy
+sudo chown caddy:caddy /var/log/caddy
+```
+
+### B. Viewing Logs
+```bash
+# Watch backend activity (real-time)
+tail -f /opt/swacn/logs/swacn.log
+
+# Watch web traffic (real-time)
+tail -f /var/log/caddy/swacn.access.log
+
+# View system service logs (journald)
+journalctl -u swacn -f
+```
+
+---
+
 ## 8. Database Migrations (Updating the Schema)
 
 **IMPORTANT:** Never run your full `schema.sql` on a production database after the first time, as it may contain `DROP TABLE` commands that wipe your data.
