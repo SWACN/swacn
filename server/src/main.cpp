@@ -88,7 +88,7 @@ int main() {
                 std::string id = sub.substr(0, slash);
                 auto dbClient = drogon::app().getDbClient();
                 dbClient->execSqlAsync(
-                    "SELECT is_public, user_id FROM projects WHERE manifest_url LIKE $1 AND deleted_at IS NULL",
+                    "SELECT is_public, user_id FROM projects WHERE manifest_url ILIKE $1 AND deleted_at IS NULL",
                     [req, fcb = std::move(fcb), fccb = std::move(fccb)](const drogon::orm::Result& r) mutable {
                         if (r.empty()) {
                             fccb();

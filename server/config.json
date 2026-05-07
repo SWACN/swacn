@@ -8,6 +8,9 @@
     "gzip_static": true,
     "file_types": [
       "html", "js", "css", "json", "cast", "gz", "tar"
-    ]
+    ],
+    "mime": {
+      "application/x-asciinema-recording": ["cast"]
+    }
   }
 }
