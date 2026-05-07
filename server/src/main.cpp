@@ -81,6 +81,14 @@ int main() {
 
     // Apply merged configuration
     drogon::app().loadConfigJson(config);
+    
+    // Force logging to file if path is provided
+    if (!log_path.empty() && log_path != "./" && log_path != ".") {
+        drogon::app().setLogPath(log_path);
+        drogon::app().setLogSizeLimit(100000000); // 100MB
+        // We don't set base name here as it defaults to "drogon" 
+        // unless set in config, but we can set it via config above.
+    }
 
     LOG_INFO << "Loaded environment variables from .env";
     LOG_INFO << "Server starting on " << listen_addr << ":" << listen_port_str;
