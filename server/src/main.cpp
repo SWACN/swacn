@@ -7,7 +7,6 @@
 void load_env(const std::string& filepath = ".env") {
     std::ifstream file(filepath);
     if (!file.is_open()) {
-        LOG_INFO << "No .env file found. Relying on system environment variables.";
         return;
     }
 
@@ -25,7 +24,6 @@ void load_env(const std::string& filepath = ".env") {
             setenv(key.c_str(), value.c_str(), 1); 
         }
     }
-    LOG_INFO << "Loaded environment variables from .env";
 }
 
 int main() {
@@ -83,6 +81,9 @@ int main() {
 
     // Apply merged configuration
     drogon::app().loadConfigJson(config);
+
+    LOG_INFO << "Loaded environment variables from .env";
+    LOG_INFO << "Server starting on " << listen_addr << ":" << listen_port_str;
 
     // Quick sanity check to ensure the env variables are actually loaded
     if (getenv("GITHUB_CLIENT_ID") == nullptr) {
@@ -180,7 +181,6 @@ int main() {
         }
     });
 
-    LOG_INFO << "Server running on " << listen_addr << ":" << listen_port_str;
     
     // 4. Run the fully asynchronous event loop
     drogon::app().run();
