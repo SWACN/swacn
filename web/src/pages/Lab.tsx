@@ -162,8 +162,8 @@ export function Lab() {
     };
 
     const handleProjectCreated = () => {
-      // Force a full page reload to ensure all caches and VM state are completely cleared
-      window.location.reload();
+      refreshProjects();
+      setIsSidebarOpen(false);
     };
 
     window.addEventListener('message', handleMessage);
