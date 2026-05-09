@@ -52,7 +52,7 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
       return new Uint8Array(await res.arrayBuffer());
     }
     const performFetch = async () => {
-      const fetchUrl = useProxy ? `/dev-proxy?url=${encodeURIComponent(url)}` : url;
+      const fetchUrl = useProxy ? `/api/v1/proxy?url=${encodeURIComponent(url)}` : url;
       const res = await fetch(fetchUrl, {
         cache: 'no-store',
         headers: {
