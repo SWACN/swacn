@@ -1,6 +1,5 @@
 #include "ProxyController.hpp"
 #include <drogon/HttpClient.h>
-#include <algorithm>
 #include <cctype>
 
 void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
@@ -33,75 +32,68 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
     std::string accept = req->getHeader("Accept");
     if (accept.empty()) accept = "*/*";
 
-    auto client = drogon::HttpClient::newHttpClient(base_url);
-    auto proxyReq = drogon::HttpRequest::newHttpRequest();
-    proxyReq->setMethod(drogon::Get);
-    proxyReq->setPath(path);
-    proxyReq->addHeader("User-Agent", ua);
-    proxyReq->addHeader("Accept", accept);
+    auto handleResponse = [callback](const drogon::HttpResponsePtr& resp) {
+        auto proxyResp = drogon::HttpResponse::newHttpResponse();
+        proxyResp->setStatusCode(resp->statusCode());
+        proxyResp->setBody(std::string(resp->body()));
+        proxyResp->setContentTypeCode(resp->contentType());
+        proxyResp->addHeader("Access-Control-Allow-Origin", "*");
+        proxyResp->addHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        callback(proxyResp);
+    };
 
-    client->sendRequest(proxyReq, [callback, ua, accept](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
-        if (result != drogon::ReqResult::Ok || !response) {
+    // Recursive fetch function to handle multiple redirects
+    auto performFetch = std::make_shared<std::function<void(std::string, int)>>();
+    *performFetch = [callback, handleResponse, ua, accept, performFetch](std::string url, int depth) {
+        if (depth <= 0) {
             auto errorResp = drogon::HttpResponse::newHttpResponse();
             errorResp->setStatusCode(drogon::k502BadGateway);
-            errorResp->setBody("Proxy request failed");
-            errorResp->addHeader("Access-Control-Allow-Origin", "*");
+            errorResp->setBody("Too many redirects");
             callback(errorResp);
             return;
         }
 
-        auto handleResponse = [callback](const drogon::HttpResponsePtr& resp) {
-            auto proxyResp = drogon::HttpResponse::newHttpResponse();
-            proxyResp->setStatusCode(resp->statusCode());
-            proxyResp->setBody(std::string(resp->body()));
-            proxyResp->setContentTypeCode(resp->contentType());
-            
-            for (auto const& [key, value] : resp->headers()) {
-                std::string k = key;
-                std::transform(k.begin(), k.end(), k.begin(), ::tolower);
-                if (k != "access-control-allow-origin" && k != "transfer-encoding" && k != "content-length") {
-                    proxyResp->addHeader(key, value);
-                }
+        size_t proto_pos = url.find("://");
+        if (proto_pos == std::string::npos) {
+            auto errorResp = drogon::HttpResponse::newHttpResponse();
+            errorResp->setStatusCode(drogon::k400BadRequest);
+            errorResp->setBody("Invalid URL format in redirect");
+            callback(errorResp);
+            return;
+        }
+
+        size_t p_pos = url.find("/", proto_pos + 3);
+        std::string b_url = (p_pos == std::string::npos) ? url : url.substr(0, p_pos);
+        std::string p = (p_pos == std::string::npos) ? "/" : url.substr(p_pos);
+
+        auto client = drogon::HttpClient::newHttpClient(b_url);
+        auto req = drogon::HttpRequest::newHttpRequest();
+        req->setPath(p);
+        req->setMethod(drogon::Get);
+        req->addHeader("User-Agent", ua);
+        req->addHeader("Accept", accept);
+
+        client->sendRequest(req, [callback, handleResponse, url, depth, performFetch](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
+            if (result != drogon::ReqResult::Ok || !response) {
+                auto errorResp = drogon::HttpResponse::newHttpResponse();
+                errorResp->setStatusCode(drogon::k502BadGateway);
+                errorResp->setBody("Proxy request failed for: " + url);
+                callback(errorResp);
+                return;
             }
-            
-            proxyResp->addHeader("Access-Control-Allow-Origin", "*");
-            callback(proxyResp);
-        };
 
-        // Handle Redirects (e.g. GitHub Releases)
-        if (response->statusCode() == drogon::k302Found || response->statusCode() == drogon::k301MovedPermanently || response->statusCode() == drogon::k307TemporaryRedirect || response->statusCode() == drogon::k308PermanentRedirect) {
-            std::string location = response->getHeader("Location");
-            if (!location.empty()) {
-                // Basic URL parsing for the redirect
-                size_t proto_pos = location.find("://");
-                if (proto_pos != std::string::npos) {
-                    size_t p_pos = location.find("/", proto_pos + 3);
-                    std::string b_url = (p_pos == std::string::npos) ? location : location.substr(0, p_pos);
-                    std::string p = (p_pos == std::string::npos) ? "/" : location.substr(p_pos);
-
-                    auto rClient = drogon::HttpClient::newHttpClient(b_url);
-                    auto rReq = drogon::HttpRequest::newHttpRequest();
-                    rReq->setPath(p);
-                    rReq->setMethod(drogon::Get);
-                    rReq->addHeader("User-Agent", ua);
-                    rReq->addHeader("Accept", accept);
-
-                    rClient->sendRequest(rReq, [callback, handleResponse](drogon::ReqResult res, const drogon::HttpResponsePtr& rResp) {
-                        if (res != drogon::ReqResult::Ok || !rResp) {
-                            auto eResp = drogon::HttpResponse::newHttpResponse();
-                            eResp->setStatusCode(drogon::k502BadGateway);
-                            eResp->setBody("Proxy redirect failed");
-                            eResp->addHeader("Access-Control-Allow-Origin", "*");
-                            callback(eResp);
-                            return;
-                        }
-                        handleResponse(rResp);
-                    });
+            if (response->statusCode() == drogon::k302Found || response->statusCode() == drogon::k301MovedPermanently || 
+                response->statusCode() == drogon::k307TemporaryRedirect || response->statusCode() == drogon::k308PermanentRedirect) {
+                std::string location = response->getHeader("Location");
+                if (!location.empty()) {
+                    (*performFetch)(location, depth - 1);
                     return;
                 }
             }
-        }
 
-        handleResponse(response);
-    });
+            handleResponse(response);
+        });
+    };
+
+    (*performFetch)(target_url, 5);
 }

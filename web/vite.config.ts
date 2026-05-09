@@ -19,7 +19,11 @@ const crossOriginIsolation = () => ({
 const fetchProxy = () => ({
   name: 'fetch-proxy',
   configureServer(server: any) {
-    server.middlewares.use('/dev-proxy', async (req: any, res: any) => {
+    server.middlewares.use(async (req: any, res: any, next: any) => {
+      if (!req.url.startsWith('/dev-proxy') && !req.url.startsWith('/api/v1/proxy')) {
+        return next();
+      }
+      
       const urlStr = new URL(req.url, 'http://localhost').searchParams.get('url');
       if (!urlStr) {
         res.statusCode = 400;

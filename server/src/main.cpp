@@ -2,6 +2,9 @@
 #include <fstream>
 #include <string>
 #include <cstdlib> // for setenv
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 // Lightweight .env parser
 void load_env(const std::string& filepath = ".env") {
@@ -84,9 +87,14 @@ int main() {
     
     // Force logging to file if path is provided
     if (!log_path.empty() && log_path != "./" && log_path != ".") {
-        drogon::app().setLogPath(log_path);
-        // We don't set base name here as it defaults to "drogon" 
-        // unless set in config, but we can set it via config above.
+        try {
+            if (!fs::exists(log_path)) {
+                fs::create_directories(log_path);
+            }
+            drogon::app().setLogPath(log_path);
+        } catch (const fs::filesystem_error& e) {
+            LOG_ERROR << "Failed to create log directory: " << e.what();
+        }
     }
 
     LOG_INFO << "Loaded environment variables from .env";

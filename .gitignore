@@ -6,3 +6,4 @@ build/
 server/public
 .cache/
 .swacn/
+*.log
