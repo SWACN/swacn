@@ -54,7 +54,7 @@ int main() {
     db_client["dbname"] = db_name;
     db_client["user"] = db_user;
     db_client["password"] = db_pass;
-    db_client["connection_number"] = 5;
+    db_client["connection_number"] = 20;
     
     config["db_clients"].append(db_client);
 
