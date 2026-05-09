@@ -1,5 +1,6 @@
 #include "ProxyController.hpp"
 #include <drogon/HttpClient.h>
+#include <functional>
 #include <cctype>
 
 void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
