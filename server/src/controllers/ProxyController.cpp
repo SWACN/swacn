@@ -28,13 +28,19 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
     std::string base_url = (path_pos == std::string::npos) ? target_url : target_url.substr(0, path_pos);
     std::string path = (path_pos == std::string::npos) ? "/" : target_url.substr(path_pos);
 
+    std::string ua = req->getHeader("User-Agent");
+    if (ua.empty()) ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+    std::string accept = req->getHeader("Accept");
+    if (accept.empty()) accept = "*/*";
+
     auto client = drogon::HttpClient::newHttpClient(base_url);
     auto proxyReq = drogon::HttpRequest::newHttpRequest();
     proxyReq->setMethod(drogon::Get);
     proxyReq->setPath(path);
-    proxyReq->addHeader("User-Agent", "SWACN-Proxy/1.0");
+    proxyReq->addHeader("User-Agent", ua);
+    proxyReq->addHeader("Accept", accept);
 
-    client->sendRequest(proxyReq, [callback](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
+    client->sendRequest(proxyReq, [callback, ua, accept](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
         if (result != drogon::ReqResult::Ok || !response) {
             auto errorResp = drogon::HttpResponse::newHttpResponse();
             errorResp->setStatusCode(drogon::k502BadGateway);
@@ -77,7 +83,8 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
                     auto rReq = drogon::HttpRequest::newHttpRequest();
                     rReq->setPath(p);
                     rReq->setMethod(drogon::Get);
-                    rReq->addHeader("User-Agent", "SWACN-Proxy/1.0");
+                    rReq->addHeader("User-Agent", ua);
+                    rReq->addHeader("Accept", accept);
 
                     rClient->sendRequest(rReq, [callback, handleResponse](drogon::ReqResult res, const drogon::HttpResponsePtr& rResp) {
                         if (res != drogon::ReqResult::Ok || !rResp) {
