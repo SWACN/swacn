@@ -14,26 +14,30 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         return;
     }
 
-    size_t protocol_pos = target_url.find("://");
-    if (protocol_pos == std::string::npos) {
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setStatusCode(drogon::k400BadRequest);
-        resp->setBody("Invalid URL format");
-        resp->addHeader("Access-Control-Allow-Origin", "*");
-        callback(resp);
-        return;
+    // Whitelist of headers to forward to the destination
+    static const std::vector<std::string> whitelist = {
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "range", "if-modified-since", "if-none-match", "cache-control",
+        "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site"
+    };
+
+    std::map<std::string, std::string> forwardHeaders;
+    for (const auto& key : whitelist) {
+        std::string val = req->getHeader(key);
+        if (!val.empty()) {
+            forwardHeaders[key] = val;
+        }
     }
 
-    size_t path_pos = target_url.find("/", protocol_pos + 3);
-    std::string base_url = (path_pos == std::string::npos) ? target_url : target_url.substr(0, path_pos);
-    std::string path = (path_pos == std::string::npos) ? "/" : target_url.substr(path_pos);
+    // Ensure we have a reasonable User-Agent if none provided
+    if (forwardHeaders.find("user-agent") == forwardHeaders.end()) {
+        forwardHeaders["user-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+    }
 
-    std::string ua = req->getHeader("User-Agent");
-    if (ua.empty()) ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
-    std::string accept = req->getHeader("Accept");
-    if (accept.empty()) accept = "*/*";
+    LOG_INFO << "[Proxy] Request: " << target_url << " from " << req->getPeerAddr().toIp();
 
-    auto handleResponse = [callback](const drogon::HttpResponsePtr& resp) {
+    auto handleResponse = [callback, target_url](const drogon::HttpResponsePtr& resp) {
+        LOG_INFO << "[Proxy] Response: " << resp->statusCode() << " for " << target_url;
         auto proxyResp = drogon::HttpResponse::newHttpResponse();
         proxyResp->setStatusCode(resp->statusCode());
         proxyResp->setBody(std::string(resp->body()));
@@ -45,8 +49,9 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
 
     // Recursive fetch function to handle multiple redirects
     auto performFetch = std::make_shared<std::function<void(std::string, int)>>();
-    *performFetch = [callback, handleResponse, ua, accept, performFetch](std::string url, int depth) {
+    *performFetch = [callback, handleResponse, forwardHeaders, performFetch](std::string url, int depth) {
         if (depth <= 0) {
+            LOG_ERROR << "[Proxy] Too many redirects for: " << url;
             auto errorResp = drogon::HttpResponse::newHttpResponse();
             errorResp->setStatusCode(drogon::k502BadGateway);
             errorResp->setBody("Too many redirects");
@@ -71,11 +76,14 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         auto req = drogon::HttpRequest::newHttpRequest();
         req->setPath(p);
         req->setMethod(drogon::Get);
-        req->addHeader("User-Agent", ua);
-        req->addHeader("Accept", accept);
+        
+        for (const auto& header : forwardHeaders) {
+            req->addHeader(header.first, header.second);
+        }
 
         client->sendRequest(req, [callback, handleResponse, url, depth, performFetch](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
             if (result != drogon::ReqResult::Ok || !response) {
+                LOG_ERROR << "[Proxy] Request failed: " << (int)result << " for " << url;
                 auto errorResp = drogon::HttpResponse::newHttpResponse();
                 errorResp->setStatusCode(drogon::k502BadGateway);
                 errorResp->setBody("Proxy request failed for: " + url);
@@ -87,6 +95,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
                 response->statusCode() == drogon::k307TemporaryRedirect || response->statusCode() == drogon::k308PermanentRedirect) {
                 std::string location = response->getHeader("Location");
                 if (!location.empty()) {
+                    LOG_INFO << "[Proxy] Redirecting to: " << location;
                     (*performFetch)(location, depth - 1);
                     return;
                 }
