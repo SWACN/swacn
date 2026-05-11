@@ -81,7 +81,8 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         std::string b_url = (p_pos == std::string::npos) ? url : url.substr(0, p_pos);
         std::string p = (p_pos == std::string::npos) ? "/" : url.substr(p_pos);
 
-        auto client = drogon::HttpClient::newHttpClient(b_url);
+        // Disable cert validation via the 4th argument of newHttpClient
+        auto client = drogon::HttpClient::newHttpClient(b_url, nullptr, false, false);
         auto req = drogon::HttpRequest::newHttpRequest();
         req->setPath(p);
         req->setMethod(drogon::Get);
@@ -95,7 +96,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
                 LOG_ERROR << "[Proxy] Request failed: " << (int)result << " for " << url;
                 auto errorResp = drogon::HttpResponse::newHttpResponse();
                 errorResp->setStatusCode(drogon::k502BadGateway);
-                errorResp->setBody("Proxy request failed for: " + url);
+                errorResp->setBody("Proxy request failed for: " + url + " (Result: " + std::to_string((int)result) + ")");
                 callback(errorResp);
                 return;
             }
