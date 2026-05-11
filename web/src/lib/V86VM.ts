@@ -491,11 +491,11 @@ export class V86VM {
 
       // ── Initial setup: disable echo first to avoid command echoing into markers ──
       this.worker?.postMessage({ type: 'SERIAL_SEND', payload: { data: 'stty -echo\n' } });
-      await mcSleep(100);
+      await mcSleep(200);
 
       await this.execWait(
         'mkdir -p /home/swacn; cd /home/swacn; ' +
-        '(mount | grep -q "/mnt") || mount -t 9p -o trans=virtio host9p /mnt/ 2>/dev/null || true; ' +
+        'mountpoint -q /mnt || mount -t 9p -o trans=virtio host9p /mnt/ 2>/dev/null || mount | grep -q "/mnt" || true; ' +
         '(while true; do if [ -f /mnt/winsize ]; then stty $(cat /mnt/winsize) < /dev/ttyS0 2>/dev/null; rm /mnt/winsize; fi; sleep 0.5; done &) '
       );
 
@@ -531,8 +531,24 @@ export class V86VM {
               if (!ip.endsWith(tool.name)) ip = ip.endsWith('/') ? `${ip}${tool.name}` : `${ip}/${tool.name}`;
               const dir = ip.substring(0, ip.lastIndexOf('/'));
               this.worker?.postMessage({ type: 'CREATE_FILE', payload: { name: fn, data } });
-              // All 4 ops in one round-trip: wait + mkdir + cp + chmod + rm
-              await this.execWait(`for i in $(seq 1 20); do if [ -f /mnt/${fn} ]; then break; fi; sleep 0.1; done; mkdir -p ${dir}; cp /mnt/${fn} ${ip}; chmod +x ${ip}; rm /mnt/${fn}`);
+              
+              // Wait for file to appear, then extract/copy
+              const isTarGz = fn.endsWith('.tar.gz') || fn.endsWith('.tgz');
+              const isGz = fn.endsWith('.gz') && !isTarGz;
+              
+              let installCmd = `for i in $(seq 1 20); do if [ -f /mnt/${fn} ]; then break; fi; sleep 0.1; done; mkdir -p ${dir}; `;
+              if (isTarGz) {
+                // For tarballs, we extract to root and then ensure the binary is at the expected path
+                // Using gunzip pipe because the VM's BusyBox tar doesn't support -z
+                installCmd += `gunzip -c /mnt/${fn} | tar -C / -xf -; [ -f ${ip} ] || find / -name ${tool.name} -type f -exec cp {} ${ip} \\; 2>/dev/null; `;
+              } else if (isGz) {
+                installCmd += `gunzip -c /mnt/${fn} > ${ip}; `;
+              } else {
+                installCmd += `cp /mnt/${fn} ${ip}; `;
+              }
+              installCmd += `chmod +x ${ip} 2>/dev/null || true; rm -f /mnt/${fn}`;
+              
+              await this.execWait(installCmd);
             }
           } catch (err) { console.error('[V86VM] tools failed', err); }
         }

@@ -17,8 +17,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
     // Whitelist of headers to forward to the destination
     static const std::vector<std::string> whitelist = {
         "user-agent", "accept", "accept-language", "accept-encoding",
-        "range", "if-modified-since", "if-none-match", "cache-control",
-        "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site"
+        "range", "if-modified-since", "if-none-match", "cache-control"
     };
 
     std::map<std::string, std::string> forwardHeaders;
@@ -41,7 +40,17 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         auto proxyResp = drogon::HttpResponse::newHttpResponse();
         proxyResp->setStatusCode(resp->statusCode());
         proxyResp->setBody(std::string(resp->body()));
-        proxyResp->setContentTypeCode(resp->contentType());
+        
+        // Forward essential headers back to the browser
+        static const std::vector<std::string> respWhitelist = {
+            "content-type", "content-encoding", "content-length",
+            "cache-control", "expires", "etag", "last-modified", "accept-ranges"
+        };
+        for (const auto& h : respWhitelist) {
+            std::string val = resp->getHeader(h);
+            if (!val.empty()) proxyResp->addHeader(h, val);
+        }
+
         proxyResp->addHeader("Access-Control-Allow-Origin", "*");
         proxyResp->addHeader("Cross-Origin-Resource-Policy", "cross-origin");
         callback(proxyResp);
