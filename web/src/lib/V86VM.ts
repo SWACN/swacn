@@ -60,7 +60,10 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
           'Pragma': 'no-cache'
         }
       });
-      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Fetch failed: ${res.status} ${body}`);
+      }
       const buffer = await res.arrayBuffer();
       try {
         if ('caches' in window) {
