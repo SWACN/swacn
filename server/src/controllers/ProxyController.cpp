@@ -1,7 +1,8 @@
 #include "ProxyController.hpp"
 #include <drogon/HttpClient.h>
 #include <functional>
-#include <cctype>
+#include <vector>
+#include <string>
 
 void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     std::string target_url = req->getParameter("url");
@@ -17,31 +18,35 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
     // Whitelist of headers to forward to the destination
     static const std::vector<std::string> whitelist = {
         "user-agent", "accept", "accept-language", "accept-encoding",
-        "range", "if-modified-since", "if-none-match", "cache-control"
+        "range", "cache-control"
     };
 
     std::map<std::string, std::string> forwardHeaders;
     for (const auto& key : whitelist) {
         std::string val = req->getHeader(key);
-        if (!val.empty()) {
-            forwardHeaders[key] = val;
-        }
+        if (!val.empty()) forwardHeaders[key] = val;
     }
 
-    // Ensure we have a reasonable User-Agent if none provided
+    // Ensure a reasonable User-Agent
     if (forwardHeaders.find("user-agent") == forwardHeaders.end()) {
         forwardHeaders["user-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
     }
 
-    LOG_INFO << "[Proxy] Request: " << target_url << " from " << req->getPeerAddr().toIp();
+    // Helper to forward the response back to the browser
+    auto forwardResponse = [callback, target_url](const drogon::HttpResponsePtr& resp) {
+        if (!resp) {
+            auto err = drogon::HttpResponse::newHttpResponse();
+            err->setStatusCode(drogon::k502BadGateway);
+            err->setBody("No response from upstream");
+            err->addHeader("Access-Control-Allow-Origin", "*");
+            callback(err);
+            return;
+        }
 
-    auto handleResponse = [callback, target_url](const drogon::HttpResponsePtr& resp) {
-        LOG_INFO << "[Proxy] Response: " << resp->statusCode() << " for " << target_url;
         auto proxyResp = drogon::HttpResponse::newHttpResponse();
         proxyResp->setStatusCode(resp->statusCode());
         proxyResp->setBody(std::string(resp->body()));
         
-        // Forward essential headers back to the browser
         static const std::vector<std::string> respWhitelist = {
             "content-type", "content-encoding", "content-length",
             "cache-control", "expires", "etag", "last-modified", "accept-ranges"
@@ -56,64 +61,75 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         callback(proxyResp);
     };
 
-    // Recursive fetch function to handle multiple redirects
-    auto performFetch = std::make_shared<std::function<void(std::string, int)>>();
-    *performFetch = [callback, handleResponse, forwardHeaders, performFetch](std::string url, int depth) {
-        if (depth <= 0) {
-            LOG_ERROR << "[Proxy] Too many redirects for: " << url;
-            auto errorResp = drogon::HttpResponse::newHttpResponse();
-            errorResp->setStatusCode(drogon::k502BadGateway);
-            errorResp->setBody("Too many redirects");
-            callback(errorResp);
-            return;
-        }
+    // Recursive fetch implementation
+    struct Fetcher : std::enable_shared_from_this<Fetcher> {
+        std::function<void(const drogon::HttpResponsePtr&)> callback;
+        std::function<void(const drogon::HttpResponsePtr&)> forwarder;
+        std::map<std::string, std::string> headers;
 
-        size_t proto_pos = url.find("://");
-        if (proto_pos == std::string::npos) {
-            auto errorResp = drogon::HttpResponse::newHttpResponse();
-            errorResp->setStatusCode(drogon::k400BadRequest);
-            errorResp->setBody("Invalid URL format in redirect");
-            callback(errorResp);
-            return;
-        }
-
-        size_t p_pos = url.find("/", proto_pos + 3);
-        std::string b_url = (p_pos == std::string::npos) ? url : url.substr(0, p_pos);
-        std::string p = (p_pos == std::string::npos) ? "/" : url.substr(p_pos);
-
-        // Disable cert validation via the 4th argument of newHttpClient
-        auto client = drogon::HttpClient::newHttpClient(b_url, nullptr, false, false);
-        auto req = drogon::HttpRequest::newHttpRequest();
-        req->setPath(p);
-        req->setMethod(drogon::Get);
-        
-        for (const auto& header : forwardHeaders) {
-            req->addHeader(header.first, header.second);
-        }
-
-        client->sendRequest(req, [callback, handleResponse, url, depth, performFetch](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
-            if (result != drogon::ReqResult::Ok || !response) {
-                LOG_ERROR << "[Proxy] Request failed: " << (int)result << " for " << url;
-                auto errorResp = drogon::HttpResponse::newHttpResponse();
-                errorResp->setStatusCode(drogon::k502BadGateway);
-                errorResp->setBody("Proxy request failed for: " + url + " (Result: " + std::to_string((int)result) + ")");
-                callback(errorResp);
+        void perform(std::string url, int depth) {
+            if (depth <= 0) {
+                auto err = drogon::HttpResponse::newHttpResponse();
+                err->setStatusCode(drogon::k502BadGateway);
+                err->setBody("Too many redirects");
+                callback(err);
                 return;
             }
 
-            if (response->statusCode() == drogon::k302Found || response->statusCode() == drogon::k301MovedPermanently || 
-                response->statusCode() == drogon::k307TemporaryRedirect || response->statusCode() == drogon::k308PermanentRedirect) {
-                std::string location = response->getHeader("Location");
-                if (!location.empty()) {
-                    LOG_INFO << "[Proxy] Redirecting to: " << location;
-                    (*performFetch)(location, depth - 1);
+            auto client = drogon::HttpClient::newHttpClient(url);
+            auto req = drogon::HttpRequest::newHttpRequest();
+            req->setMethod(drogon::Get);
+            // newHttpClient(url) extracts the path automatically, but we need to set it for the request
+            // Actually, drogon's newHttpClient(url) is a factory, the request still needs a path.
+            
+            size_t proto_pos = url.find("://");
+            if (proto_pos == std::string::npos) {
+                auto err = drogon::HttpResponse::newHttpResponse();
+                err->setStatusCode(drogon::k400BadRequest);
+                err->setBody("Invalid URL");
+                callback(err);
+                return;
+            }
+            size_t path_pos = url.find("/", proto_pos + 3);
+            std::string path = (path_pos == std::string::npos) ? "/" : url.substr(path_pos);
+            req->setPath(path);
+
+            for (const auto& h : headers) req->addHeader(h.first, h.second);
+
+            auto self = shared_from_this();
+            client->sendRequest(req, [self, url, depth](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
+                if (result != drogon::ReqResult::Ok || !response) {
+                    auto err = drogon::HttpResponse::newHttpResponse();
+                    err->setStatusCode(drogon::k502BadGateway);
+                    err->setBody("Proxy failed for " + url + " (Result: " + std::to_string((int)result) + ")");
+                    self->callback(err);
                     return;
                 }
-            }
 
-            handleResponse(response);
-        });
+                if (response->statusCode() == 301 || response->statusCode() == 302 || 
+                    response->statusCode() == 307 || response->statusCode() == 308) {
+                    std::string loc = response->getHeader("Location");
+                    if (!loc.empty()) {
+                        // Handle relative redirects
+                        if (loc.find("://") == std::string::npos) {
+                            size_t proto_pos = url.find("://");
+                            size_t host_end = url.find("/", proto_pos + 3);
+                            std::string base = (host_end == std::string::npos) ? url : url.substr(0, host_end);
+                            if (loc[0] == '/') loc = base + loc;
+                            else loc = base + "/" + loc;
+                        }
+                        self->perform(loc, depth - 1);
+                        return;
+                    }
+                }
+                self->forwarder(response);
+            });
+        }
     };
 
-    (*performFetch)(target_url, 5);
+    auto fetcher = std::make_shared<Fetcher>();
+    fetcher->callback = callback;
+    fetcher->forwarder = forwardResponse;
+    fetcher->headers = forwardHeaders;
+    fetcher->perform(target_url, 5);
 }
