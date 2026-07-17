@@ -134,7 +134,14 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
     }
   })();
   fetchPromises.set(url, p);
-  try { return new Uint8Array(await p); } catch (err) { fetchPromises.delete(url); throw err; }
+  try {
+    const result = new Uint8Array(await p);
+    fetchPromises.delete(url);
+    return result;
+  } catch (err) {
+    fetchPromises.delete(url);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------

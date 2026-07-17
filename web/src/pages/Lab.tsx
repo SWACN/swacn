@@ -164,6 +164,7 @@ export function Lab() {
     const handleProjectCreated = () => {
       refreshProjects();
       setIsSidebarOpen(false);
+      setBootCounter(prev => prev + 1);
     };
 
     window.addEventListener('message', handleMessage);
