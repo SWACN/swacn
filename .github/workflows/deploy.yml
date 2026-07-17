@@ -96,6 +96,9 @@ jobs:
             sudo systemctl restart swacn
             
             # Reload Caddy if running (requires sudo)
+            if [ -d /etc/caddy ]; then
+              sudo ln -sf /opt/swacn/Caddyfile /etc/caddy/Caddyfile
+            fi
             if systemctl is-active --quiet caddy; then
               sudo systemctl reload caddy || sudo systemctl restart caddy
             fi
