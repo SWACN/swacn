@@ -1,105 +1,131 @@
 # SWACN (Software Without Any Cool Name)
 
-## Overview
+SWACN is a next-generation interactive terminal recording and sharing platform. Unlike traditional recorders that only capture passive standard output, SWACN bridges the gap between passive observation and active experimentation. 
 
-SWACN is a next-generation terminal recording and sharing platform designed to be the interactive successor to asciinema. 
-
-Traditional terminal recorders capture a passive stream of standard output. While efficient, the viewer is limited to observation. SWACN bridges the gap between documentation and active exploration by pairing a highly optimized terminal recording with a synchronized, background v86 Virtual Machine (v86). 
-
-When a user watches a SWACN embed, they see standard, high-performance terminal playback. However, at any moment, the user can pause the recording and seamlessly transition into a fully interactive terminal session. The environment will perfectly mirror the exact filesystem and state of the recording at that specific timestamp, allowing the user to experiment, run commands, and test the software live in their browser.
-
-## Architecture: How It Works
-
-SWACN solves the "terminal state hydration" problem without relying on non-deterministic command replay. Instead, it utilizes an Event Sourcing model for the filesystem.
-
-### 1. The Recording Phase (Native C++)
-The SWACN CLI acts as a wrapper around the standard `asciinema` recording process, augmented by a baseline filesystem capture mechanism.
-
-* **Baseline Capture (`swacn record --fs`):** If requested, the CLI captures a lightweight tarball of the current project directory before starting. This serves as the `T=0` state for v86.
-* **Recording:** The CLI launches a sub-shell and immediately begins logging every keystroke and stdout frame, securely saving the terminal session into a `.cast` file.
-
-### 2. The Playback Phase (Browser/WASM)
-The frontend player utilizes `xterm.js` to render the passive recording.
-
-* **Background Boot:** Upon loading the embed, v86 initializes in a Web Worker and unpacks the baseline tarball (if provided).
-* **Playback:** As the video plays, the player parses the standard events from the `.cast` file, displaying the visual progression.
-
-### 3. The Interactive Phase (Pause & Play)
-* **Instant Transition:** Because the v86 environment is pre-loaded with the baseline filesystem, pausing the video requires zero load time. Control is instantly handed over to the user via the `xterm.js` canvas.
-* **Snapshot Restoration:** Before the user interacts, a snapshot of the v86 state is stored. Once the user resumes playback, the temporary interactive changes are wiped, the snapshot is restored, and the recording continues.
+By syncing high-performance `.cast` video playback with an in-browser **v86 Virtual Machine (x86 WASM Emulator)** running in a Web Worker, SWACN allows viewers to pause the video at any timestamp and instantly spin up an interactive terminal sandbox. The sandbox is pre-hydrated with the exact directory state and files of the workspace at that exact moment.
 
 ---
 
-## Project Roadmap
+## 🏗️ Repository Architecture
 
-To bring SWACN to production, the architecture is divided into three primary domains. Below is the comprehensive list of components that must be built.
+The codebase is structured into three primary subdirectories:
 
-### Phase 1: The Native Core (C++ CLI)
-*Status: In Progress*
+1. **`/server` (High-Performance C++ Backend)**
+   * Built on the highly optimized asynchronous **Drogon C++ Web Framework**.
+   * Integrates with a **PostgreSQL** database for user, project, and session management.
+   * Handles user authentication (Google & GitHub OAuth), CLI upload routes, subscription management via **Dodo Payments** webhooks, and oEmbed providers.
 
-The CLI is responsible for capturing the environment and multiplexing the recording streams.
+2. **`/web` (Modern React Client)**
+   * Built with **React 19**, **Vite**, **TypeScript**, and styled using **Tailwind CSS v4** (incorporating a bold, warm neo-brutalist theme).
+   * Employs **xterm.js** with fit addons to handle interactive terminal input.
+   * Integrates **v86** hardware emulation to mount and execute Linux/x86 statically-linked binaries directly inside the browser.
+   * Features custom terminal recording visualizers, a tactile **Keystroke HUD**, and dynamic dashboard controls.
 
-* [x] **Project Scaffolding:** CMake integration with C++17 filesystem support.
-* [x] **Subprocess Management:** Forking and executing `asciinema rec` as a blocking child process.
-* [x] **Baseline Initialization:** Implementation of capturing the `baseline.tar.gz` when `--fs` is provided.
-* [x] **Event Processor:** Real-time keystroke processing and appending of JSON events to the `.cast` file.
-* [ ] **Upload Mechanism:** Implementation of `swacn upload` to compress the `.swacn` directory and securely transmit it to the backend via REST API.
-
-### Phase 2: The Web Player (TypeScript / WebAssembly)
-*Status: Pending*
-
-The embeddable frontend component that handles playback and virtualization.
-
-* [ ] **Cast Parser:** A custom parser capable of reading asciinema `.cast` v2 files, separating standard `o`/`i` events for rendering from raw keystroke events.
-* [ ] **v86 Integration:** Selection and implementation of an in-browser runtime environment capable of executing standard CLI tools (e.g., lightweight x86 emulator like v86).
-* [ ] **Virtual Filesystem Manager:** An abstraction layer to mount the `baseline.tar.gz` into v86.
-* [ ] **State Snapshotting:** Memory/FS snapshotting logic to save the state on pause and revert the state on resume.
-* [ ] **UI/UX Wrapper:** The interactive overlay featuring standard video controls (play, pause, timeline scrub) integrated closely with the `xterm.js` canvas.
-
-### Phase 3: The Backend Infrastructure
-*Status: Pending*
-
-The central hub for storing recordings and serving the embeds.
-
-* [ ] **Storage Layer:** S3-compatible object storage to host the `.cast` files and baseline tarballs.
-* [ ] **Ingestion API:** Authentication and upload endpoints to receive packages from the `swacn` CLI.
-* [ ] **Embed Provider:** A lightweight serving layer that generates the standard `<iframe>` codes and configures CORS properly so the Web Player can stream the assets from storage.
+3. **`/infrastructure` (Production Configuration)**
+   * Configuration for production servers using **Caddy** (with automated HTTPS/SSL).
+   * Scripting (`provision-vm.sh`) for rapid deployment on cloud virtual machines.
+   * Systemd service file (`swacn.service`) to run the compiled C++ application server.
 
 ---
 
-## Getting Started (Development)
+## ✨ Key Features
 
-The native CLI is built using C++17 and CMake.
+* **Interactive Sandbox Player**: Pause a recording to take over the console. Run code, inspect logs, and debug workspace files live in-browser.
+* **OAuth Integrations**: Seamless login flows via Google and GitHub OAuth.
+* **Enterprise Seat Management**: Auto-provisions Pro tier access to users signing up with approved enterprise domains.
+* **Subscription & Billing**: Integrates with Dodo Payments to manage subscriptions and support upgrade options directly from the dashboard.
+* **Keyboard HUD (Keystroke Visualizer)**: Overlays live keyboard shortcuts and typing counts during replay, capturing the input using the CLI's `--stdin` logging.
+* **Project Dashboard**: A single panel where users can delete recordings, rename projects, toggle public/private visibility, customize display themes (including Catppuccin variants), and manage download rights.
 
-### Prerequisites
-* CMake (3.14 or higher)
-* A modern C++ compiler (Clang/GCC)
-* `asciinema` installed and available in your system PATH.
+---
 
-### Building the CLI
+## 🗄️ Database Model (`schema.sql`)
 
+The database is built on PostgreSQL with the following core entities:
+* `enterprises`: Manages enterprise subscription seats and license domains.
+* `users`: Stores user credentials, OAuth ids, API keys (used by the CLI), and subscription tier state.
+* `projects`: Represents workspaces, housing their styling preferences (e.g., custom themes), visibility toggle, and remote paths to baseline tarballs (`baseline_url`).
+* `casts`: Records individual terminal recordings associated with projects and files.
+
+---
+
+## 💻 Local Development Setup
+
+### 1. Database Setup
+Ensure PostgreSQL is running locally, create a database, and initialize it:
 ```bash
-# Clone the repository
-git clone <repository_url>
-cd swacn
+createdb swacn_db
+psql -d swacn_db -f server/schema.sql
+```
 
-# Create build directory
+### 2. Running the Drogon Server (`/server`)
+
+#### Prerequisites
+* CMake (3.14 or higher)
+* GCC/Clang with C++17 support
+* Drogon Framework (installed globally or via package managers like `vcpkg`/`apt`)
+* OpenSSL developer libraries
+
+#### Compilation
+From the project root:
+```bash
+cd server
 mkdir build && cd build
-
-# Configure and compile
 cmake ..
 make
 ```
 
-### Usage
+#### Environment Configuration
+Create a `.env` file in the `/server` directory:
+```env
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=swacn_db
+DB_USER=postgres
+DB_PASS=your_password
+LISTEN_ADDR=127.0.0.1
+LISTEN_PORT=8080
+APP_URL=http://localhost:3000
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+DODO_PAYMENTS_API_KEY=your_dodo_api_key
+DODO_PAYMENTS_API_URL=https://sandbox.dodopayments.com
+DODO_PAYMENTS_WEBHOOK_SECRET=your_webhook_secret
+DODO_PRO_PRODUCT_ID=your_pro_id
+LOG_PATH=./logs
+LOG_LEVEL=DEBUG
+```
+Start the compiled binary:
+```bash
+./swacn_server
+```
 
-1. Navigate to the project directory you wish to record.
-2. Run initialization to capture the baseline state:
-   ```bash
-   ./swacn init
-   ```
-3. Start recording your interactive session:
-   ```bash
-   ./swacn record
-   ```
-4. Type `exit` or press `Ctrl+D` to end the recording. The resulting assets will be stored in the local `.swacn` directory.
+### 3. Running the React Client (`/web`)
+
+#### Prerequisites
+* Node.js (v20+ recommended)
+* npm or yarn
+
+#### Running the Dev Server
+From the project root:
+```bash
+cd web
+npm install
+npm run dev
+```
+The client will be running on `http://localhost:3000`.
+
+#### Building for Production
+```bash
+npm run build
+```
+
+---
+
+## 🚀 Production Deployment
+
+We maintain comprehensive setup sheets for deploying the application on various cloud providers:
+* For general droplet setups (Ubuntu, PostgreSQL, Caddy, Systemd): Check out the [Production Deployment Guide](deployment.md).
+* For cost-effective Microsoft Azure deployments (~$6.86/month): Refer to the [Azure Deployment Guide](azure_deployment.md).
