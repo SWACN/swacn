@@ -124,7 +124,7 @@ npm run build
 
 ---
 
-## 🚀 Production Deployment
+## Production Deployment
 
 We maintain comprehensive setup sheets for deploying the application on various cloud providers:
 * For general droplet setups (Ubuntu, PostgreSQL, Caddy, Systemd): Check out the [Production Deployment Guide](deployment.md).
