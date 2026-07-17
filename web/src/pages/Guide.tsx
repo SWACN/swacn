@@ -342,30 +342,63 @@ export function Guide() {
       {/* 07. Security */}
       <section className="mb-32">
         <div className="flex items-center gap-4 mb-12">
-          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter text-error">07. Security & Privacy</h2>
-          <div className="h-[4px] flex-grow bg-error/20"></div>
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">07. Security & Privacy</h2>
+          <div className="h-[4px] flex-grow bg-on-surface/10"></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-           <div className="bg-white border-4 border-error p-8 hard-shadow">
-              <div className="flex items-center gap-4 mb-6">
-                 <div className="w-12 h-12 bg-error text-white flex items-center justify-center">
-                    <Lock size={24} />
-                 </div>
-                 <h3 className="text-2xl font-black uppercase font-headline tracking-tighter">Private Labs</h3>
-              </div>
-              <p className="text-on-surface/70 leading-relaxed text-sm">
-                Pro projects are secured by role-based access control. Unauthorized users cannot boot the VM or download the filesystem assets. However, once a user is authorized, assets are cached locally for performance.
-              </p>
-           </div>
-
-           <div className="bg-error text-white p-8 hard-shadow flex flex-col md:flex-row gap-6 items-center">
-              <ShieldAlert size={60} className="shrink-0" />
+           <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col justify-between relative overflow-hidden">
               <div>
-                 <h3 className="text-xl font-black uppercase font-headline tracking-tighter mb-2">Memory Forensics</h3>
-                 <p className="text-sm opacity-90">
+                 <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-on-surface text-white flex items-center justify-center">
+                       <Lock size={24} />
+                    </div>
+                    <h3 className="text-2xl font-black uppercase font-headline tracking-tighter">Private Labs</h3>
+                 </div>
+                 <p className="text-on-surface/70 leading-relaxed text-sm">
+                    Pro projects are secured by role-based access control. Unauthorized users cannot boot the VM or download the filesystem assets. However, once a user is authorized, assets are cached locally for performance.
+                 </p>
+              </div>
+           </div>
+ 
+           <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col justify-between relative overflow-hidden">
+              <div>
+                 <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-on-surface text-white flex items-center justify-center shrink-0">
+                       <ShieldAlert size={24} />
+                    </div>
+                    <div className="flex-grow flex items-center justify-between">
+                       <h3 className="text-2xl font-black uppercase font-headline tracking-tighter text-on-surface">Memory Forensics</h3>
+                    </div>
+                 </div>
+                 <p className="text-on-surface/75 leading-relaxed text-sm mb-6">
                    Since the VM runs in-browser, any authorized user can extract files directly from memory. <strong>Never upload production credentials or sensitive PII.</strong>
                  </p>
+                 
+                 {/* Mock Live Memory Hex Dump */}
+                 <div className="bg-on-surface text-white/70 p-4 border border-white/10 font-mono text-[11px] leading-relaxed select-none relative overflow-hidden bg-radial-grid">
+                    <div className="absolute top-0 right-0 px-2 py-0.5 border border-white/20 bg-on-surface text-white/50 text-[8px] font-black uppercase tracking-wider">Live VM Memory</div>
+                    <div className="flex justify-between text-white/30 border-b border-white/10 pb-1 mb-2 font-headline text-[9px] uppercase tracking-wider font-bold">
+                       <span>Offset</span>
+                       <span>Hex Dump</span>
+                       <span>ASCII</span>
+                    </div>
+                    <div className="opacity-95 font-bold flex justify-between gap-2">
+                       <span className="text-white/40">0x0000FA80:</span>
+                       <span className="text-white/60">4E 45 56 45 52 20 55 50</span>
+                       <span className="text-white font-black underline decoration-dashed decoration-white/50">NEVER_UP</span>
+                    </div>
+                    <div className="opacity-80 flex justify-between gap-2">
+                       <span className="text-white/40">0x0000FA88:</span>
+                       <span className="text-white/50">4C 4F 41 44 20 50 49 49</span>
+                       <span className="text-white/85 font-black underline decoration-dashed decoration-white/40">LOAD_PII</span>
+                    </div>
+                    <div className="opacity-60 flex justify-between gap-2">
+                       <span className="text-white/40">0x0000FA90:</span>
+                       <span className="text-white/40">41 55 54 48 5F 54 4F 4B</span>
+                       <span className="text-white/70 font-black underline decoration-dashed decoration-white/30">AUTH_TOK</span>
+                    </div>
+                 </div>
               </div>
            </div>
         </div>
