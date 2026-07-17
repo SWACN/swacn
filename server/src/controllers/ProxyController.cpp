@@ -119,6 +119,11 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
             std::string path = (path_pos == std::string::npos) ? "/" : url.substr(path_pos);
             req->setPath(path);
 
+            LOG_INFO << "Proxying request to URL: " << url;
+            for (const auto& h : headers) {
+                LOG_INFO << "  Forwarding Header: " << h.first << " = " << h.second;
+            }
+
             for (const auto& h : headers) req->addHeader(h.first, h.second);
 
             auto self = shared_from_this();
