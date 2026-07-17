@@ -3,6 +3,34 @@
 #include <functional>
 #include <vector>
 #include <string>
+#include <mutex>
+#include <unordered_map>
+
+static std::mutex client_map_mutex;
+static std::unordered_map<std::string, drogon::HttpClientPtr> client_map;
+
+static std::string getBaseUrl(const std::string& url) {
+    size_t proto_pos = url.find("://");
+    if (proto_pos == std::string::npos) return "";
+    size_t host_end = url.find("/", proto_pos + 3);
+    if (host_end == std::string::npos) return url;
+    return url.substr(0, host_end);
+}
+
+static drogon::HttpClientPtr getHttpClient(const std::string& url) {
+    std::string base_url = getBaseUrl(url);
+    if (base_url.empty()) return nullptr;
+    
+    std::lock_guard<std::mutex> lock(client_map_mutex);
+    auto it = client_map.find(base_url);
+    if (it != client_map.end()) {
+        return it->second;
+    }
+    
+    auto client = drogon::HttpClient::newHttpClient(base_url);
+    client_map[base_url] = client;
+    return client;
+}
 
 void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     std::string target_url = req->getParameter("url");
@@ -75,20 +103,18 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
                 return;
             }
 
-            auto client = drogon::HttpClient::newHttpClient(url);
-            auto req = drogon::HttpRequest::newHttpRequest();
-            req->setMethod(drogon::Get);
-            // newHttpClient(url) extracts the path automatically, but we need to set it for the request
-            // Actually, drogon's newHttpClient(url) is a factory, the request still needs a path.
-            
-            size_t proto_pos = url.find("://");
-            if (proto_pos == std::string::npos) {
+            auto client = getHttpClient(url);
+            if (!client) {
                 auto err = drogon::HttpResponse::newHttpResponse();
                 err->setStatusCode(drogon::k400BadRequest);
                 err->setBody("Invalid URL");
                 callback(err);
                 return;
             }
+            auto req = drogon::HttpRequest::newHttpRequest();
+            req->setMethod(drogon::Get);
+            
+            size_t proto_pos = url.find("://");
             size_t path_pos = url.find("/", proto_pos + 3);
             std::string path = (path_pos == std::string::npos) ? "/" : url.substr(path_pos);
             req->setPath(path);

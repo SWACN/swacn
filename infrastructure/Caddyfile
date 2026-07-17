@@ -2,6 +2,8 @@ swacn.com {
     log {
         output file /var/log/caddy/swacn.access.log
     }
+    encode zstd gzip
+
     # Serve static frontend files
     root * /opt/swacn/public
     file_server

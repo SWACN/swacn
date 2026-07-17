@@ -43,7 +43,7 @@ jobs:
           cd server
           mkdir build
           cd build
-          cmake ..
+          cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)
       - name: Upload Backend Binary
         uses: actions/upload-artifact@v4
