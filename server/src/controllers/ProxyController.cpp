@@ -117,14 +117,8 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
             size_t proto_pos = url.find("://");
             size_t path_pos = url.find("/", proto_pos + 3);
             std::string path = (path_pos == std::string::npos) ? "/" : url.substr(path_pos);
-            
-            size_t query_pos = path.find("?");
-            if (query_pos != std::string::npos) {
-                req->setQuery(path.substr(query_pos + 1));
-                req->setPath(path.substr(0, query_pos));
-            } else {
-                req->setPath(path);
-            }
+            req->setPath(path);
+            req->setPathEncode(false);
 
             for (const auto& h : headers) req->addHeader(h.first, h.second);
 
