@@ -27,60 +27,111 @@ export async function fetchAssetWithCache(url: string, useProxy = true): Promise
   if (fetchPromises.has(url)) return new Uint8Array(await fetchPromises.get(url)!);
   const p = (async () => {
     const cacheName = 'swacn-assets-v1';
-    const checkCache = async (): Promise<Uint8Array | null> => {
+    
+    interface CachedInfo {
+      buffer: Uint8Array;
+      etag?: string;
+      lastModified?: string;
+    }
+
+    const checkCache = async (): Promise<CachedInfo | null> => {
       try {
         if ('caches' in window) {
           const cache = await caches.open(cacheName);
           const hit = await cache.match(url);
-          if (hit) return new Uint8Array(await hit.arrayBuffer());
+          if (hit) {
+            return {
+              buffer: new Uint8Array(await hit.arrayBuffer()),
+              etag: hit.headers.get('ETag') || undefined,
+              lastModified: hit.headers.get('Last-Modified') || undefined
+            };
+          }
         }
       } catch (_) {}
       return null;
     };
-    let cached = await checkCache();
-    if (cached) { console.log(`[V86VM] Cache hit: ${url}`); return cached; }
-    console.log(`[V86VM] Cache miss: ${url}`);
-    if (url.includes('/uploads/')) {
-      const res = await fetch(url, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      if (!res.ok) throw new Error(`Failed to fetch asset: ${res.statusText}`);
-      return new Uint8Array(await res.arrayBuffer());
-    }
-    const performFetch = async () => {
+
+    let cachedInfo = await checkCache();
+
+    const performFetch = async (conditionalHeaders: Record<string, string> = {}) => {
       const fetchUrl = useProxy ? `/api/v1/proxy?url=${encodeURIComponent(url)}` : url;
       const res = await fetch(fetchUrl, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          ...conditionalHeaders
         }
       });
+
+      if (res.status === 304 && cachedInfo) {
+        console.log(`[V86VM] Cache validated (304 Not Modified): ${url}`);
+        return cachedInfo.buffer;
+      }
+
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`Fetch failed: ${res.status} ${body}`);
       }
+
       const buffer = await res.arrayBuffer();
       try {
         if ('caches' in window) {
           const cache = await caches.open(cacheName);
-          await cache.put(url, new Response(buffer, {
-            headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream' }
-          }));
+          const headers: Record<string, string> = {
+            'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream'
+          };
+          const etag = res.headers.get('ETag');
+          if (etag) headers['ETag'] = etag;
+          const lm = res.headers.get('Last-Modified');
+          if (lm) headers['Last-Modified'] = lm;
+
+          await cache.put(url, new Response(buffer, { headers }));
         }
       } catch (_) {}
       return new Uint8Array(buffer);
     };
-    if ('locks' in navigator) {
-      return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
-        const c = await checkCache(); return c ?? await performFetch();
-      });
+
+    if (url.includes('/uploads/')) {
+      if (cachedInfo) {
+        console.log(`[V86VM] Validating cached upload: ${url}`);
+        const condHeaders: Record<string, string> = {};
+        if (cachedInfo.etag) condHeaders['If-None-Match'] = cachedInfo.etag;
+        if (cachedInfo.lastModified) condHeaders['If-Modified-Since'] = cachedInfo.lastModified;
+
+        try {
+          if ('locks' in navigator) {
+            return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
+              return await performFetch(condHeaders);
+            });
+          }
+          return await performFetch(condHeaders);
+        } catch (err) {
+          console.warn(`[V86VM] Cache validation failed, falling back to cache:`, err);
+          return cachedInfo.buffer;
+        }
+      } else {
+        console.log(`[V86VM] Cache miss for upload: ${url}`);
+        if ('locks' in navigator) {
+          return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
+            return await performFetch();
+          });
+        }
+        return await performFetch();
+      }
+    } else {
+      if (cachedInfo) {
+        console.log(`[V86VM] Cache hit: ${url}`);
+        return cachedInfo.buffer;
+      }
+      console.log(`[V86VM] Cache miss: ${url}`);
+      if ('locks' in navigator) {
+        return await navigator.locks.request(`swacn_fetch_${url}`, async () => {
+          const c = await checkCache(); return c ? c.buffer : await performFetch();
+        });
+      }
+      return await performFetch();
     }
-    return await performFetch();
   })();
   fetchPromises.set(url, p);
   try { return new Uint8Array(await p); } catch (err) { fetchPromises.delete(url); throw err; }

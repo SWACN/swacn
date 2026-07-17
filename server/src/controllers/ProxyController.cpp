@@ -46,7 +46,8 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
     // Whitelist of headers to forward to the destination
     static const std::vector<std::string> whitelist = {
         "user-agent", "accept", "accept-language", "accept-encoding",
-        "range", "cache-control"
+        "range", "cache-control", "if-none-match", "if-modified-since",
+        "if-match", "if-unmodified-since"
     };
 
     std::map<std::string, std::string> forwardHeaders;
