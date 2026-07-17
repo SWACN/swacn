@@ -3,6 +3,7 @@
     "threads_num": 0,
     "document_root": "./public",
     "upload_path": "uploads", 
+    "static_files_cache_time": -1,
     "client_max_body_size": "100M",
     "use_gzip": true,
     "gzip_static": true,
