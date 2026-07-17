@@ -48,8 +48,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
         proxyResp->setBody(std::string(resp->body()));
         
         static const std::vector<std::string> respWhitelist = {
-            "content-type", "content-encoding", "content-length",
-            "cache-control", "expires", "etag", "last-modified", "accept-ranges"
+            "content-type", "cache-control", "expires", "etag", "last-modified", "accept-ranges"
         };
         for (const auto& h : respWhitelist) {
             std::string val = resp->getHeader(h);

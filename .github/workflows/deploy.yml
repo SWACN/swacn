@@ -89,17 +89,13 @@ jobs:
             cd /opt/swacn
             chmod +x swacn_server
             
-            # Link systemd service if not exists
-            if [ ! -f /etc/systemd/system/swacn.service ]; then
-              ln -s /opt/swacn/swacn.service /etc/systemd/system/swacn.service
-              systemctl daemon-reload
-              systemctl enable swacn
-            fi
+            # Link and restart systemd service (requires sudo)
+            sudo ln -sf /opt/swacn/swacn.service /etc/systemd/system/swacn.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable swacn
+            sudo systemctl restart swacn
             
-            # Restart service
-            systemctl restart swacn
-            
-            # Reload Caddy
-            if command -v caddy &> /dev/null; then
-              caddy reload --config /opt/swacn/Caddyfile || caddy start --config /opt/swacn/Caddyfile
+            # Reload Caddy if running (requires sudo)
+            if systemctl is-active --quiet caddy; then
+              sudo systemctl reload caddy || sudo systemctl restart caddy
             fi

@@ -20,7 +20,7 @@ export function Home() {
           <div className="relative z-10">
             <div className="font-mono text-xs font-black uppercase tracking-[0.4em] text-primary mb-6 flex items-center gap-3">
               <span className="w-3 h-3 bg-primary animate-pulse"></span>
-              SWACN_PROTOCOL_v1.0.4
+              SWACN_PROTOCOL_v1.0.4(Only for testing Purposes)
             </div>
             
             <h1 className="font-headline text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.85] mb-8 text-on-surface uppercase">

@@ -2,6 +2,10 @@
 
 This guide covers the end-to-end process of deploying SWACN using **Cloudflare for DNS & Email**, **DigitalOcean for Hosting**, and **GitHub for CI/CD**.
 
+> [!NOTE]
+> **Hosting on Azure?**
+> If you prefer to host on Microsoft Azure at the lowest cost (~$6.86/month), we have a dedicated [Azure Deployment Guide](file:///Users/karthikey/swacn/azure_deployment.md) that leverages a single Standard_B2ats_v2 Virtual Machine with Caddy and PostgreSQL.
+
 ---
 
 ## 1. Domain & Email Setup (`swacn.com`)
