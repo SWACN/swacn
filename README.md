@@ -6,7 +6,7 @@ By syncing high-performance `.cast` video playback with an in-browser **v86 Virt
 
 ---
 
-## 🏗️ Repository Architecture
+## Repository Architecture
 
 The codebase is structured into three primary subdirectories:
 
@@ -28,7 +28,7 @@ The codebase is structured into three primary subdirectories:
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 * **Interactive Sandbox Player**: Pause a recording to take over the console. Run code, inspect logs, and debug workspace files live in-browser.
 * **OAuth Integrations**: Seamless login flows via Google and GitHub OAuth.
@@ -39,7 +39,7 @@ The codebase is structured into three primary subdirectories:
 
 ---
 
-## 🗄️ Database Model (`schema.sql`)
+## Database Model (`schema.sql`)
 
 The database is built on PostgreSQL with the following core entities:
 * `enterprises`: Manages enterprise subscription seats and license domains.
@@ -49,7 +49,7 @@ The database is built on PostgreSQL with the following core entities:
 
 ---
 
-## 💻 Local Development Setup
+## Local Development Setup
 
 ### 1. Database Setup
 Ensure PostgreSQL is running locally, create a database, and initialize it:
@@ -124,7 +124,7 @@ npm run build
 
 ---
 
-## 🚀 Production Deployment
+## Production Deployment
 
 We maintain comprehensive setup sheets for deploying the application on various cloud providers:
 * For general droplet setups (Ubuntu, PostgreSQL, Caddy, Systemd): Check out the [Production Deployment Guide](deployment.md).
