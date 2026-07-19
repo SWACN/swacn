@@ -144,7 +144,7 @@ export function Terms() {
           <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-4">
             <Scale className="text-on-surface" size={32} />
             <h4 className="font-bold uppercase tracking-tighter text-xl">Refund Policy</h4>
-            <p className="text-sm opacity-70 leading-relaxed">Payments are generally non-refundable. If you believe there was a billing error, open a support ticket in our <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> within 14 days of the charge.</p>
+            <p className="text-sm opacity-70 leading-relaxed">Payments are generally non-refundable. If you believe there was a billing error, open a support ticket in our <a href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> within 14 days of the charge.</p>
           </div>
         </div>
       </section>
@@ -167,7 +167,7 @@ export function Terms() {
             <div className="bg-surface-container-low p-8 border-2 border-on-surface flex flex-col gap-6">
               <h4 className="font-bold uppercase text-primary">How to File a Notice</h4>
               <p className="text-sm leading-relaxed opacity-80">
-                Open a support ticket in our <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> with the specific URL of the recording, evidence of ownership of the copyrighted work, and your contact details. We will review and disable access to infringing material promptly.
+                Open a support ticket in our <a href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> with the specific URL of the recording, evidence of ownership of the copyrighted work, and your contact details. We will review and disable access to infringing material promptly.
               </p>
             </div>
           </div>

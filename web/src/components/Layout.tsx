@@ -158,7 +158,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           <Link to="/terms" className="text-on-surface hover:text-primary">Terms</Link>
           <Link to="/privacy" className="text-on-surface hover:text-primary">Privacy</Link>
-          <a className="text-on-surface hover:text-primary" href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer">Discord</a>
+          <a className="text-on-surface hover:text-primary" href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer">Discord</a>
           {token && (
             <button 
               onClick={() => {

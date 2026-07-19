@@ -23,7 +23,7 @@ Only the latest release or the current state of the main branch is actively supp
 
 If you discover a security vulnerability, please do **not** open a public issue on GitHub. Instead, report it privately so we can address it responsibly.
 
-* **Contact:** Please open a private support ticket or direct message an administrator on our [Discord Server](https://discord.gg/SDyspbmkKq).
+* **Contact:** Please open a private support ticket or direct message an administrator on our [Discord Server](https://discord.gg/aNxmb3Mr3g).
 * **What to include:**
   * A description of the vulnerability.
   * Step-by-step instructions (or a proof-of-concept script/recording) to reproduce the issue.

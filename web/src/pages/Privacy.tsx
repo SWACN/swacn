@@ -135,7 +135,7 @@ export function Privacy() {
             <div>
               <h5 className="font-bold mb-2">Right to Erasure (Delete Account)</h5>
               <p className="opacity-70 leading-relaxed mb-4">
-                You can request the deletion of your account and associated personal information (email, profile info, and all uploaded casts/projects) by opening a support ticket in our <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a>. We will process erasure requests within 30 days.
+                You can request the deletion of your account and associated personal information (email, profile info, and all uploaded casts/projects) by opening a support ticket in our <a href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a>. We will process erasure requests within 30 days.
               </p>
             </div>
             <div>
@@ -147,12 +147,12 @@ export function Privacy() {
             <div>
               <h5 className="font-bold mb-2">India DPDP Act (2023) & Grievance</h5>
               <p className="opacity-70 leading-relaxed">
-                For residents of India, your data is processed in accordance with the Digital Personal Data Protection Act. Any data grievances can be submitted to our designated Grievance Officer by opening a ticket in the <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a>.
+                For residents of India, your data is processed in accordance with the Digital Personal Data Protection Act. Any data grievances can be submitted to our designated Grievance Officer by opening a ticket in the <a href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a>.
               </p>
             </div>
           </div>
           <div className="border-t border-on-surface/10 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <span className="font-mono text-xs opacity-50 uppercase">Contact: <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Support</a></span>
+            <span className="font-mono text-xs opacity-50 uppercase">Contact: <a href="https://discord.gg/aNxmb3Mr3g" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Support</a></span>
             <span className="font-mono text-xs opacity-50 uppercase">Last Updated: July 19, 2026</span>
           </div>
         </div>
