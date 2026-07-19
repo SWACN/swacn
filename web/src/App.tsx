@@ -1,6 +1,7 @@
 /**
  * @license
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2026 SWACN. All rights reserved.
+ * Proprietary and Confidential.
  */
 
 import React from 'react';
@@ -17,6 +18,7 @@ import { Guide } from './pages/Guide';
 import { AuthCallback } from './pages/AuthCallback';
 import { Dashboard } from './pages/Dashboard';
 import { Terms } from './pages/Terms';
+import { Privacy } from './pages/Privacy';
 
 export default function App() {
   return (
@@ -31,6 +33,7 @@ export default function App() {
           <Route path="/guide" element={<Guide />} />
 
           <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           {/* Fallback route */}
 
           <Route path="*" element={<Home />} />

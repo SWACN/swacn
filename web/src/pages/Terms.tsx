@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Lock, FileText, Scale, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, FileText, Scale, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
 export function Terms() {
   return (
@@ -118,6 +118,57 @@ export function Terms() {
               <div className="mt-auto pt-6 border-t border-on-surface/10">
                 <p className="text-xs opacity-50 uppercase font-black">Last Updated: April 24, 2026</p>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 04. Subscriptions & Payments */}
+      <section className="mb-32">
+        <div className="flex items-center gap-4 mb-12">
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">04. Subscriptions & Payments</h2>
+          <div className="h-[4px] flex-grow bg-primary/20"></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-4">
+            <CheckCircle2 className="text-primary" size={32} />
+            <h4 className="font-bold uppercase tracking-tighter text-xl">Billing & Renewals</h4>
+            <p className="text-sm opacity-70 leading-relaxed">Subscriptions are processed automatically via Dodo Payments on a recurring monthly or annual basis. You can view your status on the Dashboard.</p>
+          </div>
+          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-4">
+            <X className="text-error" size={32} />
+            <h4 className="font-bold uppercase tracking-tighter text-xl">Cancellation</h4>
+            <p className="text-sm opacity-70 leading-relaxed">You may cancel your subscription at any time via your dashboard or customer billing portal. Access to Pro features will remain active until the end of the current billing cycle.</p>
+          </div>
+          <div className="bg-white border-4 border-on-surface p-8 hard-shadow flex flex-col gap-4">
+            <Scale className="text-on-surface" size={32} />
+            <h4 className="font-bold uppercase tracking-tighter text-xl">Refund Policy</h4>
+            <p className="text-sm opacity-70 leading-relaxed">Payments are generally non-refundable. If you believe there was a billing error, open a support ticket in our <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> within 14 days of the charge.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* 05. DMCA & Copyright Takedowns */}
+      <section className="mb-32">
+        <div className="flex items-center gap-4 mb-12">
+          <h2 className="font-headline text-4xl font-black uppercase tracking-tighter">05. Copyright & DMCA</h2>
+          <div className="h-[4px] flex-grow bg-on-surface"></div>
+        </div>
+
+        <div className="bg-white border-4 border-on-surface p-8 md:p-12 hard-shadow">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <div>
+              <h3 className="text-3xl font-black font-headline uppercase tracking-tighter mb-6">Notice and Takedown</h3>
+              <p className="text-lg leading-relaxed text-on-surface/70 mb-6">
+                We respect intellectual property rights. If you believe content uploaded to SWACN infringes your copyright, you can submit a takedown request.
+              </p>
+            </div>
+            <div className="bg-surface-container-low p-8 border-2 border-on-surface flex flex-col gap-6">
+              <h4 className="font-bold uppercase text-primary">How to File a Notice</h4>
+              <p className="text-sm leading-relaxed opacity-80">
+                Open a support ticket in our <a href="https://discord.gg/SDyspbmkKq" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Discord Server</a> with the specific URL of the recording, evidence of ownership of the copyrighted work, and your contact details. We will review and disable access to infringing material promptly.
+              </p>
             </div>
           </div>
         </div>
