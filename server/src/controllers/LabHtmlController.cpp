@@ -65,7 +65,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "\n    <!-- Primary Meta Tags -->\n";
             tags << "    <title>SWACN | " << project_name << " by " << author_name << "</title>\n";
             tags << "    <meta name=\"title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
-            tags << "    <meta name=\"description\" content=\"Watch the terminal recording for '" << project_name << "' and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
+            tags << "    <meta name=\"description\" content=\"Watch the terminal recording for " << project_name << " and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
             tags << "    <meta name=\"author\" content=\"" << author_name << "\">\n";
             
             tags << "\n    <!-- Open Graph / Facebook -->\n";
@@ -73,7 +73,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta property=\"og:url\" content=\"" << full_url << "\">\n";
             tags << "    <meta property=\"og:site_name\" content=\"SWACN\">\n";
             tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
-            tags << "    <meta property=\"og:description\" content=\"Watch the terminal recording for '" << project_name << "' and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
+            tags << "    <meta property=\"og:description\" content=\"Watch the terminal recording for " << project_name << " and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
             tags << "    <meta property=\"og:image\" content=\"" << share_img << "\">\n";
             tags << "    <meta property=\"og:video\" content=\"" << embed_url << "\">\n";
             tags << "    <meta property=\"og:video:secure_url\" content=\"" << embed_url << "\">\n";
@@ -87,7 +87,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"twitter:creator\" content=\"@swacn\">\n";
             tags << "    <meta name=\"twitter:url\" content=\"" << full_url << "\">\n";
             tags << "    <meta name=\"twitter:title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
-            tags << "    <meta name=\"twitter:description\" content=\"Watch the terminal recording for '" << project_name << "' and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
+            tags << "    <meta name=\"twitter:description\" content=\"Watch the terminal recording for " << project_name << " and try out the CLI tools alongside it in a live, in-browser sandbox with zero local installation, created by " << author_name << ".\">\n";
             tags << "    <meta name=\"twitter:image\" content=\"" << share_img << "\">\n";
             tags << "    <meta name=\"twitter:image:alt\" content=\"Interactive Terminal Session\">\n";
             tags << "    <meta name=\"twitter:player\" content=\"" << embed_url << "\">\n";
