@@ -1,6 +1,7 @@
 #include "LabHtmlController.hpp"
 #include <fstream>
 #include <sstream>
+#include <regex>
 #include <drogon/utils/Utilities.h>
 
 void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
@@ -24,6 +25,14 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             std::stringstream buffer;
             buffer << file.rdbuf();
             std::string html = buffer.str();
+
+            // Strip existing static SEO/OG/Twitter tags to prevent duplicates from the base index.html
+            html = std::regex_replace(html, std::regex("<title>[\\s\\S]*?</title>"), "");
+            html = std::regex_replace(html, std::regex("<meta name=\"description\"[^>]*>"), "");
+            html = std::regex_replace(html, std::regex("<meta name=\"keywords\"[^>]*>"), "");
+            html = std::regex_replace(html, std::regex("<meta name=\"author\"[^>]*>"), "");
+            html = std::regex_replace(html, std::regex("<meta property=\"og:[^\"]*\"[^>]*>"), "");
+            html = std::regex_replace(html, std::regex("<meta name=\"twitter:[^\"]*\"[^>]*>"), "");
 
             std::string project_name = (r.size() > 0 && !r[0]["name"].isNull()) ? r[0]["name"].as<std::string>() : "Terminal Session";
             if (project_name.empty()) project_name = "Terminal Session";
