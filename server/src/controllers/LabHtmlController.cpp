@@ -8,7 +8,7 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
     std::string like_pattern = id + "/%";
 
     dbClient->execSqlAsync(
-        "SELECT name FROM projects WHERE manifest_url LIKE $1",
+        "SELECT p.name, u.username FROM projects p LEFT JOIN users u ON p.user_id = u.id WHERE p.manifest_url LIKE $1",
         [callback, id, req](const drogon::orm::Result& r) {
             std::string document_root = drogon::app().getDocumentRoot();
             if (document_root.empty()) {
@@ -27,6 +27,9 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
 
             std::string project_name = (r.size() > 0 && !r[0]["name"].isNull()) ? r[0]["name"].as<std::string>() : "Terminal Session";
             if (project_name.empty()) project_name = "Terminal Session";
+
+            std::string author_name = (r.size() > 0 && !r[0]["username"].isNull()) ? r[0]["username"].as<std::string>() : "SWACN User";
+            if (author_name.empty()) author_name = "SWACN User";
 
             const char* env_url = getenv("APP_URL");
             std::string base_url = env_url ? std::string(env_url) : "https://swacn.com";
@@ -51,16 +54,17 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             // Build Comprehensive Meta Tags
             std::stringstream tags;
             tags << "\n    <!-- Primary Meta Tags -->\n";
-            tags << "    <title>SWACN | " << project_name << "</title>\n";
-            tags << "    <meta name=\"title\" content=\"SWACN | " << project_name << "\">\n";
-            tags << "    <meta name=\"description\" content=\"Interactive terminal lab environment on SWACN.\">\n";
+            tags << "    <title>SWACN | " << project_name << " by " << author_name << "</title>\n";
+            tags << "    <meta name=\"title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
+            tags << "    <meta name=\"description\" content=\"Watch the terminal recording for '" << project_name << "' on SWACN and try out the CLI tools live in-browser with zero installation, created by " << author_name << ".\">\n";
+            tags << "    <meta name=\"author\" content=\"" << author_name << "\">\n";
             
             tags << "\n    <!-- Open Graph / Facebook -->\n";
             tags << "    <meta property=\"og:type\" content=\"website\">\n";
             tags << "    <meta property=\"og:url\" content=\"" << full_url << "\">\n";
             tags << "    <meta property=\"og:site_name\" content=\"SWACN\">\n";
-            tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << "\">\n";
-            tags << "    <meta property=\"og:description\" content=\"Interactive terminal lab environment.\">\n";
+            tags << "    <meta property=\"og:title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
+            tags << "    <meta property=\"og:description\" content=\"Watch the terminal recording for '" << project_name << "' and try out the CLI tools live in-browser with zero installation, created by " << author_name << ".\">\n";
             tags << "    <meta property=\"og:image\" content=\"" << share_img << "\">\n";
             tags << "    <meta property=\"og:video\" content=\"" << embed_url << "\">\n";
             tags << "    <meta property=\"og:video:secure_url\" content=\"" << embed_url << "\">\n";
@@ -73,8 +77,8 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"twitter:site\" content=\"@swacn\">\n";
             tags << "    <meta name=\"twitter:creator\" content=\"@swacn\">\n";
             tags << "    <meta name=\"twitter:url\" content=\"" << full_url << "\">\n";
-            tags << "    <meta name=\"twitter:title\" content=\"SWACN | " << project_name << "\">\n";
-            tags << "    <meta name=\"twitter:description\" content=\"Interactive terminal lab environment.\">\n";
+            tags << "    <meta name=\"twitter:title\" content=\"SWACN | " << project_name << " by " << author_name << "\">\n";
+            tags << "    <meta name=\"twitter:description\" content=\"Watch the terminal recording for '" << project_name << "' and try out the CLI tools live in-browser with zero installation, created by " << author_name << ".\">\n";
             tags << "    <meta name=\"twitter:image\" content=\"" << share_img << "\">\n";
             tags << "    <meta name=\"twitter:image:alt\" content=\"Interactive Terminal Session\">\n";
             tags << "    <meta name=\"twitter:player\" content=\"" << embed_url << "\">\n";
@@ -82,8 +86,8 @@ void LabHtmlController::serveLab(const drogon::HttpRequestPtr& req, std::functio
             tags << "    <meta name=\"twitter:player:height\" content=\"600\">\n";
 
             tags << "\n    <!-- oEmbed Discovery -->\n";
-            tags << "    <link rel=\"alternate\" type=\"application/json+oembed\" href=\"" << oembed_url << "\" title=\"" << project_name << "\" />\n";
-            tags << "    <link rel=\"alternate\" type=\"text/xml+oembed\" href=\"" << oembed_url << "&format=xml\" title=\"" << project_name << "\" />\n";
+            tags << "    <link rel=\"alternate\" type=\"application/json+oembed\" href=\"" << oembed_url << "\" title=\"" << project_name << " by " << author_name << "\" />\n";
+            tags << "    <link rel=\"alternate\" type=\"text/xml+oembed\" href=\"" << oembed_url << "&format=xml\" title=\"" << project_name << " by " << author_name << "\" />\n";
 
             size_t head_close_pos = html.find("</head>");
             if (head_close_pos != std::string::npos) {

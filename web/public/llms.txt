@@ -1,0 +1,42 @@
+# SWACN - Watch Terminal Recordings and Try Out CLI Tools In-Browser
+
+SWACN (Software Without Any Cool Name) is a platform that lets developers share terminal recordings alongside an interactive, browser-native sandbox. Instead of static terminal videos where viewers can only watch, SWACN embeds an in-browser x86 Virtual Machine (WASM Emulator running in a Web Worker) alongside the terminal playback panel. Viewers can watch the recording and immediately try out the demonstrated CLI tools and scripts inside a live Linux terminal sandbox, with zero local installation required.
+
+## Tech Stack & Architecture
+
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4 (neo-brutalist theme), `xterm.js` for interactive console input, and `v86` hardware emulator for client-side virtualization.
+- **Backend**: Asynchronous Drogon C++ Web Framework, serving static assets, dynamic meta-tag rendering, oEmbed discovery endpoints, and PostgreSQL database integration.
+- **Infrastructure**: production servers utilize Caddy for automated HTTPS/SSL proxying and security headers required for SharedArrayBuffer isolation.
+
+## Binary Compatibility & VM Sandbox Requirements
+
+Since the browser VM simulates an Intel 80386 architecture, uploaded tools and binaries must meet these constraints:
+1. **Architecture**: x86 (32-bit/i386)
+2. **Linking**: Statically linked (no dynamic libc dependencies)
+3. **OS**: Linux compatible
+
+*Pro-Tip*: Go and Rust tools natively support compiling static Linux 386 binaries. To check compatibility locally:
+```bash
+file ./my-tool
+# Must output: ELF 32-bit LSB executable, Intel 80386, statically linked
+```
+
+## Payload File Structure
+
+A standard payload directory is compressed into `baseline.tar.gz` and mounted into `/root` on the VM:
+```text
+my-project/
+├── welcome.txt      # Optional: Greeting text printed on terminal boot
+├── init.sh          # Optional: Script containing boot commands (e.g. build steps)
+├── src/             # Source files (Python, Node, C, etc.)
+└── data/            # Static assets and YAML configurations
+```
+
+## Creating & Uploading Recordings
+
+1. **Record the Session**: Capture inputs and keystroke metrics by running asciinema:
+   ```bash
+   asciinema rec --stdin my-recording.cast
+   ```
+2. **Setup the Project**: Access the SWACN Workspace (using GitHub or Google OAuth). Click "MAKE PROJECT" to set environment variables and attach custom 32-bit binaries.
+3. **Deploy**: Upload the local workspace directory and the `.cast` file. The interactive lab environment is generated instantly.

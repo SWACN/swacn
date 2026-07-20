@@ -28,7 +28,7 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
     std::string like_pattern = uuid + "/%";
     
     dbClient->execSqlAsync(
-        "SELECT name as title FROM projects WHERE manifest_url LIKE $1",
+        "SELECT p.name AS title, u.username AS author_name FROM projects p LEFT JOIN users u ON p.user_id = u.id WHERE p.manifest_url LIKE $1",
         [callback, url, uuid, req](const drogon::orm::Result& r) {
             if (r.empty()) {
                 auto resp = drogon::HttpResponse::newHttpResponse();
@@ -40,6 +40,9 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             
             std::string title = r[0]["title"].isNull() ? "Terminal Session" : r[0]["title"].as<std::string>();
             if (title.empty()) title = "Terminal Session";
+
+            std::string author_name = (r.size() > 0 && !r[0]["author_name"].isNull()) ? r[0]["author_name"].as<std::string>() : "SWACN User";
+            if (author_name.empty()) author_name = "SWACN User";
 
             std::string iframe_url = url;
             if (iframe_url.find("embed=true") == std::string::npos) {
@@ -55,7 +58,7 @@ void OembedController::getOembed(const drogon::HttpRequestPtr& req, std::functio
             oembed["type"] = "rich";
             oembed["title"] = title;
             oembed["provider_name"] = "SWACN";
-            oembed["author_name"] = "SWACN User";
+            oembed["author_name"] = author_name;
             
             const char* env_url = getenv("APP_URL");
             std::string base_url = env_url ? std::string(env_url) : "https://swacn.com";

@@ -1,0 +1,17 @@
+# robots.txt for SWACN (https://swacn.com)
+# Allow all search engine crawlers and AI search bots to index the main site and public labs.
+
+User-agent: *
+Allow: /
+Allow: /lab/
+Allow: /guide
+Allow: /terms
+Allow: /privacy
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /webhooks/
+Disallow: /auth-callback
+Disallow: /dashboard
+
+# Sitemaps
+Sitemap: https://swacn.com/sitemap.xml
