@@ -378,7 +378,7 @@ void CastController::updateCastSettings(const drogon::HttpRequestPtr& req, std::
     dbClient->execSqlAsync(
         "UPDATE projects SET theme = $1, show_keystrokes = $2, allow_fs_download = $3, embed_theme = $4 "
         "FROM users "
-        "WHERE projects.user_id = users.id AND users.api_key = $5 AND projects.manifest_url LIKE $6 "
+        "WHERE projects.user_id = users.id AND users.api_key = $5 AND projects.manifest_url ILIKE $6 "
         "RETURNING projects.id",
         [callback](const drogon::orm::Result& r) {
             if (r.empty()) {
@@ -726,7 +726,7 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         "  WHEN $2 <> '' THEN $2 "
                         "  ELSE baseline_url "
                         "END, "
-                        "show_keystrokes = CASE WHEN $5 THEN $3 ELSE show_keystrokes END, "
+                        "show_keystrokes = show_keystrokes, "
                         "is_public = CASE WHEN $6 THEN $7 ELSE is_public END "
                         "WHERE id = $4",
                         [callback, dbClient, id, project_id, user_id, project_title, recording_files, cast_titles](const drogon::orm::Result& res) {

@@ -23,6 +23,18 @@ const K = {
 // ---------------------------------------------------------------------------
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
 
+export function clearAssetCache(urlPrefix?: string) {
+  if (!urlPrefix) {
+    fetchPromises.clear();
+  } else {
+    for (const key of fetchPromises.keys()) {
+      if (key.includes(urlPrefix)) {
+        fetchPromises.delete(key);
+      }
+    }
+  }
+}
+
 export async function fetchAssetWithCache(url: string, useProxy = true): Promise<Uint8Array> {
   if (fetchPromises.has(url)) return new Uint8Array(await fetchPromises.get(url)!);
   const p = (async () => {

@@ -4,6 +4,7 @@ import { SquareTerminal, XCircle, Globe, Lock } from 'lucide-react';
 import { getAuthToken, fetchCasts, fetchCastDetails, fetchMe } from '../lib/api';
 import { TarBuilder } from '../lib/TarBuilder';
 import { TarReader } from '../lib/TarReader';
+import { clearAssetCache } from '../lib/V86VM';
 
 interface Props {
   isOpen: boolean;
@@ -271,6 +272,9 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
         if (rec.id && rec.deleted) {
           formData.append(`delete_cast_${rec.id}`, 'true');
         } else if (rec.file && !rec.deleted) {
+          if (rec.id) {
+            formData.append(`delete_cast_${rec.id}`, 'true');
+          }
           totalSize += rec.file.size;
           formData.append(`recording_${recordingIndex}`, rec.file, `recording_${recordingIndex}.cast`);
           formData.append(`title_${recordingIndex}`, rec.title.trim());
@@ -295,6 +299,7 @@ export function ProjectCreatorModal({ isOpen, editCastId, onClose }: Props) {
         const { updateCastUpload } = await import('../lib/api');
         await updateCastUpload(editCastId, formData);
 
+        clearAssetCache(editCastId);
         try {
           if ('caches' in window) {
             const cache = await caches.open('swacn-assets-v1');

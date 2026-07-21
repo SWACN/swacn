@@ -40,8 +40,9 @@ export function Lab() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isEmbed = searchParams.get('embed') === 'true';
-  
+  const hudParam = searchParams.get('hud') ?? searchParams.get('show_keystrokes');
+  const hudOverride = hudParam !== null ? hudParam === 'true' : null;
+
   const [activeTab, setActiveTab] = useState<Tab>('projects');
   const [token, setToken] = useState<string | null>(getAuthToken());
   const [theme, setTheme] = useState<Theme>(() => {
@@ -55,7 +56,10 @@ export function Lab() {
     return localStorage.getItem(`swacn_name_${id}`) || '';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showKeystrokes, setShowKeystrokes] = useState<boolean>(true);
+  const [showKeystrokes, setShowKeystrokes] = useState<boolean>(() => {
+    if (hudOverride !== null) return hudOverride;
+    return true;
+  });
   const [loadError, setLoadError] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
@@ -201,7 +205,11 @@ export function Lab() {
       if (cached) {
         if (TERMINAL_THEMES[cached.theme as Theme]) setTheme(cached.theme as Theme);
         setEmbedTheme((cached.embed_theme as 'light' | 'dark') || 'dark');
-        setShowKeystrokes(cached.show_keystrokes);
+        if (hudOverride !== null) {
+          setShowKeystrokes(hudOverride);
+        } else if (cached.show_keystrokes !== undefined) {
+          setShowKeystrokes(cached.show_keystrokes);
+        }
         setAllowFsDownload(cached.allow_fs_download ?? true);
         // setHasBaseline is intentionally removed from optimistic sync to ensure fresh database state is used
         if (cached.casts) setCasts(cached.casts);
@@ -224,7 +232,7 @@ export function Lab() {
         setHasRecording(details.has_recording ?? false);
         setHasBaseline(details.has_baseline ?? false);
         setAllowFsDownload(details.allow_fs_download ?? true);
-        setShowKeystrokes(details.show_keystrokes ?? true);
+        setShowKeystrokes(hudOverride !== null ? hudOverride : (details.show_keystrokes ?? true));
         if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
         setLoadError(null);
@@ -245,7 +253,7 @@ export function Lab() {
       setIsSandboxMode(true);
       setProjectName('');
     }
-  }, [id, projects]);
+  }, [id, projects, hudOverride]);
 
   const isOwner = !id || projects.some(p => String(p.id) === String(id) || p.uuid === id);
 
@@ -256,8 +264,13 @@ export function Lab() {
     }
   }, [vmStatus, isDefaultSandbox]);
 
+  const updateLocalProjectState = (key: string, value: any) => {
+    setProjects(prev => prev.map(p => (String(p.id) === String(id) || p.uuid === id) ? { ...p, [key]: value } : p));
+  };
+
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
+    updateLocalProjectState('theme', newTheme);
     if (id && isOwner) {
       updateCastSettings(id, { theme: newTheme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload, embed_theme: embedTheme }).catch(console.error);
     }
@@ -265,6 +278,7 @@ export function Lab() {
 
   const handleKeystrokesChange = (show: boolean) => {
     setShowKeystrokes(show);
+    updateLocalProjectState('show_keystrokes', show);
     if (id && isOwner) {
       updateCastSettings(id, { theme, show_keystrokes: show, allow_fs_download: allowFsDownload, embed_theme: embedTheme }).catch(console.error);
     }
@@ -272,6 +286,7 @@ export function Lab() {
 
   const handleFsDownloadChange = (allow: boolean) => {
     setAllowFsDownload(allow);
+    updateLocalProjectState('allow_fs_download', allow);
     if (id && isOwner) {
       updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allow, embed_theme: embedTheme }).catch(console.error);
     }
@@ -279,6 +294,7 @@ export function Lab() {
 
   const handleEmbedThemeChange = (newEmbedTheme: 'light' | 'dark') => {
     setEmbedTheme(newEmbedTheme);
+    updateLocalProjectState('embed_theme', newEmbedTheme);
     if (id && isOwner) {
       updateCastSettings(id, { theme, show_keystrokes: showKeystrokes, allow_fs_download: allowFsDownload, embed_theme: newEmbedTheme }).catch(console.error);
     }
