@@ -119,11 +119,10 @@ export function Lab() {
   const recordingUrl = useMemo(() => {
     if (currentCast) return `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${currentCast.id}`;
     if (id && hasRecording) {
-      if (casts.length === 0) return null;
       return `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${id}`;
     }
     return null;
-  }, [id, token, hasRecording, currentCast, casts.length]);
+  }, [id, token, hasRecording, currentCast]);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
