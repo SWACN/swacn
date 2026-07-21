@@ -40,6 +40,7 @@ export function Lab() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isEmbed = searchParams.get('embed') === 'true';
   const hudParam = searchParams.get('hud') ?? searchParams.get('show_keystrokes');
   const hudOverride = hudParam !== null ? hudParam === 'true' : null;
 
