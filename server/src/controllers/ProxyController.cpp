@@ -6,9 +6,6 @@
 #include <mutex>
 #include <unordered_map>
 
-static std::mutex client_map_mutex;
-static std::unordered_map<std::string, drogon::HttpClientPtr> client_map;
-
 static std::string getBaseUrl(const std::string& url) {
     size_t proto_pos = url.find("://");
     if (proto_pos == std::string::npos) return "";
@@ -20,16 +17,7 @@ static std::string getBaseUrl(const std::string& url) {
 static drogon::HttpClientPtr getHttpClient(const std::string& url) {
     std::string base_url = getBaseUrl(url);
     if (base_url.empty()) return nullptr;
-    
-    std::lock_guard<std::mutex> lock(client_map_mutex);
-    auto it = client_map.find(base_url);
-    if (it != client_map.end()) {
-        return it->second;
-    }
-    
-    auto client = drogon::HttpClient::newHttpClient(base_url);
-    client_map[base_url] = client;
-    return client;
+    return drogon::HttpClient::newHttpClient(base_url);
 }
 
 void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
@@ -124,7 +112,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
             for (const auto& h : headers) req->addHeader(h.first, h.second);
 
             auto self = shared_from_this();
-            client->sendRequest(req, [self, url, depth](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
+            client->sendRequest(req, [self, client, url, depth](drogon::ReqResult result, const drogon::HttpResponsePtr& response) {
                 if (result != drogon::ReqResult::Ok || !response) {
                     auto err = drogon::HttpResponse::newHttpResponse();
                     err->setStatusCode(drogon::k502BadGateway);
@@ -150,7 +138,7 @@ void ProxyController::fetchUrl(const drogon::HttpRequestPtr& req, std::function<
                     }
                 }
                 self->forwarder(response);
-            });
+            }, 30.0);
         }
     };
 

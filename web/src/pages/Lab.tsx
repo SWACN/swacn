@@ -224,6 +224,7 @@ export function Lab() {
         setHasRecording(details.has_recording ?? false);
         setHasBaseline(details.has_baseline ?? false);
         setAllowFsDownload(details.allow_fs_download ?? true);
+        setShowKeystrokes(details.show_keystrokes ?? true);
         if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
         setLoadError(null);
