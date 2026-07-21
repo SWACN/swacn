@@ -73,6 +73,12 @@ export function Lab() {
   const castIndexParam = parseInt(searchParams.get('castIndex') || '0', 10);
   const isSingleCastEmbed = searchParams.has('castIndex');
   const [activeCastIndex, setActiveCastIndex] = useState(isNaN(castIndexParam) ? 0 : castIndexParam);
+
+  useEffect(() => {
+    if (!isNaN(castIndexParam)) {
+      setActiveCastIndex(castIndexParam);
+    }
+  }, [castIndexParam]);
   const [embedTheme, setEmbedTheme] = useState<'light' | 'dark'>(() => {
     if (!id) return 'dark';
     const cached = localStorage.getItem(`swacn_embed_theme_${id}`);

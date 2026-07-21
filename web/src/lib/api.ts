@@ -53,6 +53,12 @@ export async function fetchCasts() {
   return res.json();
 }
 
+function parseCleanId(id: string): { cleanId: string; query: string } {
+  const idx = id.indexOf('?');
+  if (idx === -1) return { cleanId: id, query: '' };
+  return { cleanId: id.substring(0, idx), query: id.substring(idx) };
+}
+
 export async function fetchCastDetails(id: string) {
   const token = getAuthToken();
   const headers: any = {
@@ -61,7 +67,8 @@ export async function fetchCastDetails(id: string) {
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`/api/v1/casts/${id}`, { headers });
+  const { cleanId, query } = parseCleanId(id);
+  const res = await fetch(`/api/v1/casts/${cleanId}${query}`, { headers });
   if (res.status === 401) {
     logout();
     throw new Error("Session expired. Please sign in again.");
@@ -78,7 +85,8 @@ export async function updateCastSettings(id: string, settings: { theme: string, 
   const token = getAuthToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch(`/api/v1/casts/${id}/settings`, {
+  const { cleanId, query } = parseCleanId(id);
+  const res = await fetch(`/api/v1/casts/${cleanId}/settings${query}`, {
     method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -95,7 +103,8 @@ export async function deleteCast(id: string) {
   const token = getAuthToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch(`/api/v1/casts/${id}`, {
+  const { cleanId, query } = parseCleanId(id);
+  const res = await fetch(`/api/v1/casts/${cleanId}${query}`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -110,7 +119,8 @@ export async function updateCastUpload(id: string, formData: FormData) {
   const token = getAuthToken();
   if (!token) throw new Error("Not authenticated");
 
-  const res = await fetch(`/api/v1/casts/${id}/upload`, {
+  const { cleanId, query } = parseCleanId(id);
+  const res = await fetch(`/api/v1/casts/${cleanId}/upload${query}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`

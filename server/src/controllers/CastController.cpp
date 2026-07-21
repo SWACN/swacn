@@ -240,6 +240,7 @@ void CastController::uploadCast(const drogon::HttpRequestPtr& req, std::function
 }
 
 void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
+    if (size_t pos = id.find('?'); pos != std::string::npos) id = id.substr(0, pos);
     auto dbClient = drogon::app().getDbClient();
     std::string like_pattern = id + "/%";
     
@@ -349,6 +350,7 @@ void CastController::getCast(const drogon::HttpRequestPtr& req, std::function<vo
 }
 
 void CastController::updateCastSettings(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
+    if (size_t pos = id.find('?'); pos != std::string::npos) id = id.substr(0, pos);
     std::string auth_header = req->getHeader("Authorization");
     if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
         auto resp = drogon::HttpResponse::newHttpResponse();
@@ -461,6 +463,7 @@ void CastController::listCasts(const drogon::HttpRequestPtr& req, std::function<
 }
 
 void CastController::deleteCast(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
+    if (size_t pos = id.find('?'); pos != std::string::npos) id = id.substr(0, pos);
     std::string auth_header = req->getHeader("Authorization");
     if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
         auto resp = drogon::HttpResponse::newHttpResponse();
@@ -513,6 +516,7 @@ void CastController::deleteCast(const drogon::HttpRequestPtr& req, std::function
 }
 
 void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, std::string id) {
+    if (size_t pos = id.find('?'); pos != std::string::npos) id = id.substr(0, pos);
     std::string auth_header = req->getHeader("Authorization");
     if (auth_header.empty() || auth_header.find("Bearer ") != 0) {
         auto resp = drogon::HttpResponse::newHttpResponse();
