@@ -115,14 +115,22 @@ export function Lab() {
   const isDefaultSandbox = !id;
   const manifestUrl = useMemo(() => id ? `/uploads/${id}/manifest.json?${token ? `token=${token}&` : ''}t=${Date.now()}` : null, [id, token, bootCounter]);
   const baselineUrl = useMemo(() => id ? `/uploads/${id}/baseline.tar.gz?${token ? `token=${token}&` : ''}t=${Date.now()}` : null, [id, token, bootCounter]);
-  const currentCast = casts[activeCastIndex];
+  const activeCast = useMemo(() => {
+    if (casts.length === 0) return null;
+    const safeIndex = (activeCastIndex >= 0 && activeCastIndex < casts.length) ? activeCastIndex : 0;
+    return casts[safeIndex];
+  }, [casts, activeCastIndex]);
+
+  const currentCast = activeCast;
   const recordingUrl = useMemo(() => {
-    if (currentCast) return `/uploads/${currentCast.recording_url}?${token ? `token=${token}&` : ''}t=${currentCast.id}`;
-    if (id && hasRecording) {
+    if (activeCast) {
+      return `/uploads/${activeCast.recording_url}?${token ? `token=${token}&` : ''}t=${activeCast.id}`;
+    }
+    if (id && hasRecording && casts.length === 0) {
       return `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${id}`;
     }
     return null;
-  }, [id, token, hasRecording, currentCast]);
+  }, [id, token, hasRecording, activeCast, casts.length]);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
