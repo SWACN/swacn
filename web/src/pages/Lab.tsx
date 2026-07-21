@@ -62,6 +62,7 @@ export function Lab() {
     return true;
   });
   const [loadError, setLoadError] = useState<number | null>(null);
+  const [isDetailsLoaded, setIsDetailsLoaded] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [copiedEmbedCast, setCopiedEmbedCast] = useState(false);
@@ -123,14 +124,19 @@ export function Lab() {
 
   const currentCast = activeCast;
   const recordingUrl = useMemo(() => {
+    if (!id || !hasRecording) return null;
+
     if (activeCast) {
       return `/uploads/${activeCast.recording_url}?${token ? `token=${token}&` : ''}t=${activeCast.id}`;
     }
-    if (id && hasRecording && casts.length === 0) {
+    if (casts.length > 0 && casts[0]?.recording_url) {
+      return `/uploads/${casts[0].recording_url}?${token ? `token=${token}&` : ''}t=${casts[0].id}`;
+    }
+    if (isDetailsLoaded && casts.length === 0) {
       return `/uploads/${id}/recording.cast?${token ? `token=${token}&` : ''}t=${id}`;
     }
     return null;
-  }, [id, token, hasRecording, activeCast, casts.length]);
+  }, [id, token, hasRecording, activeCast, casts, isDetailsLoaded]);
   const authChannelRef = useRef<BroadcastChannel | null>(null);
 
   const refreshProjects = () => {
@@ -229,6 +235,9 @@ export function Lab() {
         if (cached.casts) setCasts(cached.casts);
         setIsSandboxMode(!cached.has_recording);
         setProjectName(cached.name || '');
+        setIsDetailsLoaded(true);
+      } else {
+        setIsDetailsLoaded(false);
       }
 
       // 2. FETCH SOURCE OF TRUTH (with cache busting)
@@ -250,11 +259,13 @@ export function Lab() {
         if (details.casts) setCasts(details.casts);
         setIsSandboxMode(!details.has_recording);
         setLoadError(null);
+        setIsDetailsLoaded(true);
       }).catch(err => {
         console.error("Failed to fetch cast details", err);
         if (err.status) setLoadError(err.status);
         setHasRecording(true);
         setIsSandboxMode(false);
+        setIsDetailsLoaded(true);
       });
     } else {
       // Base Sandbox: always interactive, no recording
