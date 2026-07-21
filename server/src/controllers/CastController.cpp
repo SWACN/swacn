@@ -730,9 +730,8 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                         "  WHEN $2 <> '' THEN $2 "
                         "  ELSE baseline_url "
                         "END, "
-                        "show_keystrokes = show_keystrokes, "
-                        "is_public = CASE WHEN $6 THEN $7 ELSE is_public END "
-                        "WHERE id = $4",
+                        "is_public = CASE WHEN $4 THEN $5 ELSE is_public END "
+                        "WHERE id = $3",
                         [callback, dbClient, id, project_id, user_id, project_title, recording_files, cast_titles](const drogon::orm::Result& res) {
                             LOG_INFO << "Project update SQL executed for ID: " << project_id;
                             auto returnSuccess = [callback, id]() {
@@ -765,7 +764,10 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                                         if (*counter == 0) returnSuccess();
                                     },
                                     [callback](const drogon::orm::DrogonDbException& e) {
-                                        auto resp = drogon::HttpResponse::newHttpResponse();
+                                        LOG_ERROR << "Failed to insert cast on update: " << e.base().what();
+                                        Json::Value err;
+                                        err["error"] = "Failed to update cast recordings";
+                                        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
                                         resp->setStatusCode(drogon::k500InternalServerError);
                                         callback(resp);
                                     },
@@ -774,15 +776,16 @@ void CastController::updateCastUpload(const drogon::HttpRequestPtr& req, std::fu
                             }
                         },
                         [callback](const drogon::orm::DrogonDbException& e) {
-                            auto resp = drogon::HttpResponse::newHttpResponse();
+                            LOG_ERROR << "Failed to update project SQL: " << e.base().what();
+                            Json::Value err;
+                            err["error"] = "Failed to update project details";
+                            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
                             resp->setStatusCode(drogon::k500InternalServerError);
                             callback(resp);
                         },
                         project_title,
                         baseline_val,
-                        has_keystrokes,
                         project_id,
-                        !recording_files.empty(),
                         has_public_update,
                         is_public_update
                     );
