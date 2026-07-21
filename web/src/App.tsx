@@ -30,6 +30,8 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/lab/:id" element={<Lab />} />
           <Route path="/lab" element={<Lab />} /> {/* Fallback for testing */}
+          <Route path="/view/:id" element={<Lab />} />
+          <Route path="/view" element={<Lab />} />
           <Route path="/guide" element={<Guide />} />
 
           <Route path="/terms" element={<Terms />} />

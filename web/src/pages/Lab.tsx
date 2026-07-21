@@ -363,6 +363,11 @@ export function Lab() {
 
     if (playerInstance.current) {
       playerInstance.current.dispose();
+      playerInstance.current = null;
+    }
+
+    if (playerContainerRef.current) {
+      playerContainerRef.current.innerHTML = '';
     }
 
     const player = AsciinemaPlayer.create(recordingUrl, playerContainerRef.current, {
